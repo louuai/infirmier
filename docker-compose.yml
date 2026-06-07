@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: infirmier_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: infirmier
+      POSTGRES_PASSWORD: infirmier_password
+      POSTGRES_DB: infirmier_tunis
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infirmier -d infirmier_tunis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: infirmier_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://infirmier:infirmier_password@db:5432/infirmier_tunis?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-use-long-secret}
+      JWT_EXPIRES_IN: 7d
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      PLATFORM_COMMISSION_RATE: "10"
+      PAYMENT_PROVIDER: mock
+      LOG_LEVEL: info
+    ports:
+      - "3000:3000"
+    # Applique les migrations puis démarre le serveur.
+    command: sh -c "npx prisma migrate deploy && node server.js"
+
+volumes:
+  pgdata:

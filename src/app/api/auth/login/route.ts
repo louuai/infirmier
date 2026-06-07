@@ -1,0 +1,46 @@
+import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { verifyPassword, signToken, AUTH_COOKIE } from "@/lib/auth";
+import { loginSchema } from "@/lib/validations";
+import { UnauthorizedError, handleApiError, ForbiddenError } from "@/lib/errors";
+import { ok } from "@/lib/api";
+
+export async function POST(req: NextRequest) {
+  try {
+    const input = loginSchema.parse(await req.json());
+
+    const user = await prisma.user.findUnique({
+      where: { email: input.email },
+    });
+    if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
+      throw new UnauthorizedError("Email ou mot de passe incorrect");
+    }
+    if (!user.isActive) throw new ForbiddenError("Compte désactivé");
+
+    const token = await signToken({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const res = ok({
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    });
+    res.cookies.set(AUTH_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    return res;
+  } catch (err) {
+    return handleApiError(err);
+  }
+}

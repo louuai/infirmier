@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, signToken, AUTH_COOKIE } from "@/lib/auth";
+import { signToken, AUTH_COOKIE } from "@/lib/auth";
+import { hashPassword } from "@/lib/password";
 import { registerSchema } from "@/lib/validations";
 import { ConflictError, handleApiError } from "@/lib/errors";
 import { created } from "@/lib/api";

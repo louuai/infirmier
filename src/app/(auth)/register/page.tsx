@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [role, setRole] = useState<"PATIENT" | "NURSE">(
@@ -49,67 +49,75 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="container flex min-h-[calc(100vh-4rem)] items-center justify-center py-12">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Inscription</CardTitle>
-          <CardDescription>Créez votre compte en moins d'une minute.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-5 grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
-            {(["PATIENT", "NURSE"] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={cn(
-                  "rounded-md py-2 text-sm font-medium transition",
-                  role === r ? "bg-background shadow text-primary" : "text-muted-foreground",
-                )}
-              >
-                {r === "PATIENT" ? "Je suis patient" : "Je suis infirmier"}
-              </button>
-            ))}
+    <Card className="w-full max-w-md">
+      <CardHeader>
+        <CardTitle className="text-2xl">Inscription</CardTitle>
+        <CardDescription>Créez votre compte en moins d'une minute.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-5 grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
+          {(["PATIENT", "NURSE"] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setRole(r)}
+              className={cn(
+                "rounded-md py-2 text-sm font-medium transition",
+                role === r ? "bg-background shadow text-primary" : "text-muted-foreground",
+              )}
+            >
+              {r === "PATIENT" ? "Je suis patient" : "Je suis infirmier"}
+            </button>
+          ))}
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="firstName">Prénom</Label>
+              <Input id="firstName" name="firstName" required />
+            </div>
+            <div>
+              <Label htmlFor="lastName">Nom</Label>
+              <Input id="lastName" name="lastName" required />
+            </div>
           </div>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="firstName">Prénom</Label>
-                <Input id="firstName" name="firstName" required />
-              </div>
-              <div>
-                <Label htmlFor="lastName">Nom</Label>
-                <Input id="lastName" name="lastName" required />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required />
-            </div>
-            <div>
-              <Label htmlFor="phone">Téléphone</Label>
-              <Input id="phone" name="phone" placeholder="+216 ..." />
-            </div>
-            <div>
-              <Label htmlFor="password">Mot de passe</Label>
-              <Input id="password" name="password" type="password" required />
-              <p className="mt-1 text-xs text-muted-foreground">
-                8+ caractères, une majuscule et un chiffre.
-              </p>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Création..." : "Créer mon compte"}
-            </Button>
-          </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            Déjà inscrit ?{" "}
-            <Link href="/login" className="text-primary hover:underline">
-              Se connecter
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" name="email" type="email" required />
+          </div>
+          <div>
+            <Label htmlFor="phone">Téléphone</Label>
+            <Input id="phone" name="phone" placeholder="+216 ..." />
+          </div>
+          <div>
+            <Label htmlFor="password">Mot de passe</Label>
+            <Input id="password" name="password" type="password" required />
+            <p className="mt-1 text-xs text-muted-foreground">
+              8+ caractères, une majuscule et un chiffre.
+            </p>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Création..." : "Créer mon compte"}
+          </Button>
+        </form>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          Déjà inscrit ?{" "}
+          <Link href="/login" className="text-primary hover:underline">
+            Se connecter
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <div className="container flex min-h-[calc(100vh-4rem)] items-center justify-center py-12">
+      <Suspense fallback={null}>
+        <RegisterForm />
+      </Suspense>
     </div>
   );
 }

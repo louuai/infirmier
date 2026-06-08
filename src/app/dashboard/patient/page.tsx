@@ -84,6 +84,7 @@ export default function PatientDashboard() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-emerald-300">{formatTND(b.price)}</span>
                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${s.c}`}>{s.t}</span>
+                    <Link href={`/invoices/${b.id}`} className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10">Facture</Link>
                     {b.status === "AWAITING_PAYMENT" && (
                       <button onClick={() => pay(b.id)} disabled={paying === b.id} className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
                         <CreditCard className="size-4" /> {paying === b.id ? "..." : "Payer"}

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Star, MapPin, Briefcase, ShieldCheck } from "lucide-react";
 import { formatTND } from "@/lib/utils";
 import { BookingForm } from "./booking-form";
+import { VerifiedBadge } from "@/components/verified-badge";
 
 export default async function NurseDetailPage({
   params,
@@ -38,7 +39,7 @@ export default async function NurseDetailPage({
               {nurse.user.firstName[0]}{nurse.user.lastName[0]}
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold">{nurse.user.firstName} {nurse.user.lastName}</h1>
+              <h1 className="flex items-center gap-1.5 text-2xl font-bold">{nurse.user.firstName} {nurse.user.lastName} <VerifiedBadge size={20} /></h1>
               <p className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span className="flex items-center gap-1"><MapPin className="size-4" /> {nurse.city ?? "—"}</span>
                 <span className="flex items-center gap-1"><Briefcase className="size-4" /> {nurse.yearsOfExperience} ans</span>

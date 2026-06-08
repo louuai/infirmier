@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Star, MapPin, Clock, ArrowRight } from "lucide-react";
+import { VerifiedBadge } from "@/components/verified-badge";
 import { formatTND } from "@/lib/utils";
 
 interface Props {
@@ -27,8 +28,8 @@ export function NurseCard({ nurse, serviceId, servicePrice }: Props) {
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-white">
-            {nurse.user.firstName} {nurse.user.lastName}
+          <p className="flex items-center gap-1 truncate font-semibold text-white">
+            {nurse.user.firstName} {nurse.user.lastName} <VerifiedBadge size={15} />
           </p>
           <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-400">
             <span className="flex items-center gap-1"><MapPin className="size-3.5" /> {nurse.city ?? "—"}</span>

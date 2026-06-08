@@ -159,6 +159,7 @@ export default function NurseDashboard() {
                           <button onClick={() => toggleShare(b.id)} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold ${sharingId === b.id ? "bg-emerald-500 text-white" : "border border-emerald-400/40 text-emerald-300"}`}><Navigation className="size-4" /> {sharingId === b.id ? "Position partagée…" : "Partager position"}</button>
                           <Btn onClick={() => act(b.id, "arrived")}>Arrivé</Btn>
                         </>}
+                        {["PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(b.status) && <Link href={`/messages?booking=${b.id}`} className="rounded-full border border-white/15 px-4 py-1.5 text-sm text-white hover:bg-white/10">Chat client</Link>}
                         {b.status === "ARRIVED" && <Btn onClick={() => act(b.id, "start")}>Commencer le soin</Btn>}
                         {b.status === "IN_PROGRESS" && <Btn onClick={() => act(b.id, "complete")}>Terminer</Btn>}
                       </div>
@@ -204,38 +205,77 @@ function BtnGhost({ onClick, children }: { onClick: () => void; children: React.
 
 function Documents({ docs, hasDiploma, hasCin, onChange }: { docs: any[]; hasDiploma: boolean; hasCin: boolean; onChange: () => void }) {
   const [type, setType] = useState<"DIPLOMA" | "CIN">("DIPLOMA");
+  const [mode, setMode] = useState<"link" | "camera" | "file">("link");
   const [url, setUrl] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const inputCls = "h-10 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-sky-400/60";
 
-  async function add() {
+  async function submitDoc(fileUrl: string) {
+    const res = await fetch("/api/nurses/me/documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, fileUrl }) });
+    if (!res.ok) { alert((await res.json()).error); return false; }
+    return true;
+  }
+  async function addLink() {
     if (!url) return;
-    setSaving(true);
-    const res = await fetch("/api/nurses/me/documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, fileUrl: url }) });
-    setSaving(false);
-    if (!res.ok) { alert((await res.json()).error); return; }
-    setUrl(""); onChange();
+    setBusy(true);
+    if (await submitDoc(url)) { setUrl(""); onChange(); }
+    setBusy(false);
   }
-  async function del(id: string) {
-    await fetch(`/api/nurses/me/documents?id=${id}`, { method: "DELETE" }); onChange();
+  async function uploadAndSubmit(file: File | undefined | null) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const up = await fetch("/api/upload", { method: "POST", body: fd });
+      const d = await up.json();
+      if (!up.ok) { alert(d.error ?? "Upload impossible — utilisez l'option Lien."); setBusy(false); return; }
+      if (await submitDoc(d.data.url)) onChange();
+    } catch { alert("Erreur d'upload"); }
+    setBusy(false);
   }
+  async function del(id: string) { await fetch(`/api/nurses/me/documents?id=${id}`, { method: "DELETE" }); onChange(); }
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl glass p-6">
         <h2 className="mb-1 font-semibold">Pièces justificatives</h2>
-        <p className="mb-4 text-sm text-slate-400">Diplôme d'État + CIN. Visibles uniquement par l'administrateur pour validation. Collez un lien vers vos documents scannés (Drive, photo hébergée…).</p>
+        <p className="mb-4 text-sm text-slate-400">Diplôme d'État + CIN. Visibles uniquement par l'administrateur pour validation.</p>
         <div className="flex items-center gap-3 text-sm">
           <span className={`rounded-full px-3 py-1 ${hasDiploma ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"}`}>Diplôme {hasDiploma ? "✓" : "manquant"}</span>
           <span className={`rounded-full px-3 py-1 ${hasCin ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"}`}>CIN {hasCin ? "✓" : "manquante"}</span>
         </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-[160px_1fr_auto]">
-          <select value={type} onChange={(e) => setType(e.target.value as "DIPLOMA" | "CIN")} className={inputCls}>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <select value={type} onChange={(e) => setType(e.target.value as "DIPLOMA" | "CIN")} className="h-10 rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white">
             <option value="DIPLOMA" className="bg-[#0b1220]">Diplôme</option>
             <option value="CIN" className="bg-[#0b1220]">CIN</option>
           </select>
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://lien-vers-le-document" className={inputCls} />
-          <button onClick={add} disabled={saving} className="rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">Ajouter</button>
+          <div className="flex gap-1 rounded-full glass p-1">
+            {([["link", "Lien"], ["camera", "Caméra"], ["file", "Fichier"]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setMode(k)} className={`rounded-full px-3 py-1.5 text-sm ${mode === k ? "bg-emerald-500 text-white" : "text-slate-300 hover:bg-white/10"}`}>{l}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3">
+          {mode === "link" && (
+            <div className="flex gap-2">
+              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://lien-vers-le-document" className={inputCls} />
+              <button onClick={addLink} disabled={busy} className="rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">Ajouter</button>
+            </div>
+          )}
+          {mode === "camera" && (
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/20 bg-white/5 px-4 py-6 text-sm text-slate-300 hover:bg-white/10">
+              {busy ? "Envoi…" : "📷 Prendre une photo du document"}
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => uploadAndSubmit(e.target.files?.[0])} />
+            </label>
+          )}
+          {mode === "file" && (
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/20 bg-white/5 px-4 py-6 text-sm text-slate-300 hover:bg-white/10">
+              {busy ? "Envoi…" : "📁 Choisir un fichier (image ou PDF)"}
+              <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadAndSubmit(e.target.files?.[0])} />
+            </label>
+          )}
         </div>
       </div>
 
@@ -259,22 +299,12 @@ function Documents({ docs, hasDiploma, hasCin, onChange }: { docs: any[]; hasDip
 }
 
 function ContactAdmin() {
-  const [sent, setSent] = useState(false);
-  const inputCls = "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-sky-400/60";
-  async function send(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const res = await fetch("/api/support", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: f.get("subject"), message: f.get("message") }) });
-    if (res.ok) setSent(true); else alert((await res.json()).error);
-  }
-  if (sent) return <div className="rounded-2xl bg-emerald-500/10 p-6 text-emerald-200">Message envoyé à l'administrateur ✅. Vous serez recontacté.</div>;
   return (
-    <form onSubmit={send} className="max-w-xl space-y-3 rounded-2xl glass p-6">
-      <h2 className="font-semibold">Contacter l'administrateur</h2>
-      <input name="subject" required placeholder="Sujet" className={inputCls} />
-      <textarea name="message" required placeholder="Votre message (problème, paiement, vérification...)" className={`min-h-[120px] ${inputCls}`} />
-      <button className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-5 py-2.5 text-sm font-semibold text-white"><Send className="size-4" /> Envoyer</button>
-    </form>
+    <div className="max-w-xl rounded-2xl glass p-6">
+      <h2 className="mb-2 font-semibold">Discuter avec l'administrateur</h2>
+      <p className="mb-4 text-sm text-slate-400">Messagerie en temps réel : posez vos questions (paiement, vérification, litige…).</p>
+      <Link href="/messages?admin=1" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-5 py-2.5 text-sm font-semibold text-white"><Send className="size-4" /> Ouvrir la messagerie</Link>
+    </div>
   );
 }
 

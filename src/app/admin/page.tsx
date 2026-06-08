@@ -133,6 +133,7 @@ export default function AdminDashboard() {
 
         {tab === "messages" && (
           <div className="space-y-3">
+            <a href="/messages" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-5 py-2.5 text-sm font-semibold text-white">Ouvrir la messagerie temps réel</a>
             {messages.length === 0 && <p className="text-slate-500">Aucun message.</p>}
             {messages.map((m) => (
               <div key={m.id} className="rounded-2xl glass p-5">

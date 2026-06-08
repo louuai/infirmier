@@ -63,18 +63,19 @@ export function Navbar() {
           { href: "/admin", label: "Centre de contrôle", icon: LayoutDashboard },
           { href: "/admin?tab=services", label: "Services & tarifs", icon: FileText },
           { href: "/admin?tab=verify", label: "Vérifications", icon: ShieldCheck },
-          { href: "/admin?tab=messages", label: "Messages", icon: MessageSquare },
+          { href: "/messages", label: "Messages", icon: MessageSquare },
         ]
       : me?.role === "NURSE"
         ? [
             { href: "/dashboard/nurse", label: "Tableau de bord", icon: LayoutDashboard },
             { href: "/dashboard/nurse?tab=documents", label: "Mes documents", icon: ShieldCheck },
             { href: "/dashboard/nurse?tab=invoices", label: "Mes factures", icon: FileText },
-            { href: "/dashboard/nurse?tab=contact", label: "Contacter l'admin", icon: MessageSquare },
+            { href: "/messages", label: "Messagerie", icon: MessageSquare },
           ]
         : [
             { href: "/dashboard/patient", label: "Mes réservations", icon: LayoutDashboard },
             { href: "/dashboard/patient?tab=invoices", label: "Mes factures", icon: FileText },
+            { href: "/messages", label: "Messagerie", icon: MessageSquare },
           ];
 
   return (

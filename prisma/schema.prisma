@@ -128,6 +128,8 @@ model User {
   reviewsWritten    Review[]        @relation("ReviewAuthor")
   notifications     Notification[]
   favorites         Favorite[]
+  conversations     ConversationParticipant[]
+  messagesSent      Message[]                 @relation("MessageSender")
 
   @@index([role])
   @@map("users")
@@ -304,6 +306,7 @@ model Booking {
   revenue         Revenue?
   trackingSession TrackingSession?
   liveLocations   LiveLocation[]
+  conversation    Conversation?
 
   @@index([patientId])
   @@index([nurseId])
@@ -476,4 +479,53 @@ model Notification {
 
   @@index([userId, read])
   @@map("notifications")
+}
+
+
+// ===================== CHAT / MESSAGERIE =====================
+
+enum ConversationKind {
+  ADMIN_NURSE
+  CLIENT_NURSE
+}
+
+model Conversation {
+  id            String           @id @default(cuid())
+  kind          ConversationKind
+  bookingId     String?          @unique
+  booking       Booking?         @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  createdAt     DateTime         @default(now())
+  lastMessageAt DateTime         @default(now())
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([kind])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@map("messages")
 }

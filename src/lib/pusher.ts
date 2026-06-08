@@ -27,3 +27,4 @@ export async function trigger(channel: string, event: string, data: unknown) {
 }
 
 export const bookingChannel = (bookingId: string) => `booking-${bookingId}`;
+export const conversationChannel = (id: string) => `conversation-${id}`;

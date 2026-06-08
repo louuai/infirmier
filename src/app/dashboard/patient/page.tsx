@@ -90,6 +90,9 @@ export default function PatientDashboard() {
                         <CreditCard className="size-4" /> {paying === b.id ? "..." : "Payer"}
                       </button>
                     )}
+                    {["PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(b.status) && (
+                      <Link href={`/messages?booking=${b.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10">Chat</Link>
+                    )}
                     {["EN_ROUTE", "ARRIVED"].includes(b.status) && (
                       <Link href={`/track/${b.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 px-4 py-1.5 text-sm font-semibold text-emerald-300">
                         <MapPin className="size-4" /> Suivre

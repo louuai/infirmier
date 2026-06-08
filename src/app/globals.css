@@ -42,7 +42,9 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply antialiased;
+    background-color: #03040d;
+    color: #e2e8f0;
   }
 }
 

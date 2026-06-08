@@ -52,7 +52,7 @@ export default function HomePage() {
   return (
     <div className="bg-[#03040d] text-slate-100">
       {/* ===================== HERO — CŒUR 3D ===================== */}
-      <section className="relative flex min-h-[100svh] flex-col overflow-hidden">
+      <section className="relative -mt-16 flex min-h-[100svh] flex-col overflow-hidden">
         <AstralHeart />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,#03040d_85%)]" />
 

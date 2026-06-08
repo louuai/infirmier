@@ -13,6 +13,7 @@ interface Me {
 
 export function Navbar() {
   const [me, setMe] = useState<Me | null>(null);
+  const [scrolled, setScrolled] = useState(false);
   const router = useRouter();
   const clickRef = useRef<{ n: number; t: number }>({ n: 0, t: 0 });
 
@@ -23,6 +24,13 @@ export function Navbar() {
       .catch(() => setMe(null));
   }, []);
 
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setMe(null);
@@ -30,7 +38,7 @@ export function Navbar() {
     router.refresh();
   }
 
-  /** Entrée secrète : 5 clics rapides sur le logo → page de connexion. */
+  /** Entrée secrète : 5 clics rapides sur le logo → connexion. */
   function onLogo() {
     const now = Date.now();
     const prev = clickRef.current;
@@ -52,7 +60,13 @@ export function Navbar() {
         : "/dashboard/patient";
 
   return (
-    <header className="sticky top-0 z-50 h-16 border-b border-white/10 bg-[#03060f]/70 backdrop-blur-xl">
+    <header
+      className={`fixed inset-x-0 top-0 z-50 h-16 transition-all duration-300 ${
+        scrolled
+          ? "border-b border-white/10 bg-[#03040d]/70 backdrop-blur-xl"
+          : "border-b border-transparent bg-transparent"
+      }`}
+    >
       <div className="container flex h-16 items-center justify-between">
         <button
           onClick={onLogo}

@@ -2,12 +2,18 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+const AstralBackground = dynamic(() => import("@/components/astral-background"), {
+  ssr: false,
+  loading: () => null,
+});
 
 function RegisterForm() {
   const router = useRouter();
@@ -114,10 +120,14 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <div className="container flex min-h-[calc(100vh-4rem)] items-center justify-center py-12">
-      <Suspense fallback={null}>
-        <RegisterForm />
-      </Suspense>
+    <div className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-hidden bg-[#03040d] px-4 py-12">
+      <AstralBackground />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,#03040d_82%)]" />
+      <div className="relative z-10 w-full max-w-md">
+        <Suspense fallback={null}>
+          <RegisterForm />
+        </Suspense>
+      </div>
     </div>
   );
 }

@@ -12,25 +12,25 @@ import {
   Star,
   HeartPulse,
   ChevronDown,
-  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 
-const AstralBackground = dynamic(() => import("@/components/astral-background"), {
+const AstralHeart = dynamic(() => import("@/components/astral-heart"), {
   ssr: false,
   loading: () => null,
 });
 
 const STEPS = [
-  { icon: MapPin, title: "Localisez", text: "Trouvez les infirmiers disponibles près de chez vous." },
-  { icon: CalendarClock, title: "Réservez", text: "Choisissez un créneau et le type de soin." },
-  { icon: CreditCard, title: "Payez en ligne", text: "Paiement sécurisé, confirmation immédiate." },
-  { icon: Stethoscope, title: "Soyez soigné", text: "L'infirmier intervient directement à domicile." },
+  { icon: MapPin, title: "Localisez", text: "Les infirmiers disponibles près de chez vous, en temps réel." },
+  { icon: CalendarClock, title: "Réservez", text: "Choisissez un créneau et le type de soin requis." },
+  { icon: CreditCard, title: "Payez", text: "Paiement en ligne sécurisé, confirmation immédiate." },
+  { icon: Stethoscope, title: "Soyez soigné", text: "L'infirmier intervient directement à votre domicile." },
 ];
 
 const FEATURES = [
-  { icon: ShieldCheck, title: "Infirmiers vérifiés", text: "Diplôme et CIN validés par notre équipe avant toute mission." },
+  { icon: ShieldCheck, title: "Infirmiers vérifiés", text: "Diplôme et CIN validés par notre équipe avant chaque mission." },
   { icon: Star, title: "Avis transparents", text: "Notes et commentaires laissés par de vrais patients." },
-  { icon: MapPin, title: "Près de chez vous", text: "Recherche par ville et par distance GPS en temps réel." },
+  { icon: MapPin, title: "Près de chez vous", text: "Recherche par ville et par distance GPS, instantanée." },
 ];
 
 const STATS = [
@@ -40,59 +40,70 @@ const STATS = [
   { value: "+24", label: "Villes couvertes" },
 ];
 
+function Label({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={`font-mono text-[11px] uppercase tracking-[0.25em] text-slate-400/80 ${className}`}>
+      {children}
+    </span>
+  );
+}
+
 export default function HomePage() {
   return (
-    <div className="bg-[#03060f] text-slate-100">
-      {/* ===================== HERO ASTRAL ===================== */}
-      <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden">
-        <AstralBackground />
-        {/* halos lumineux */}
-        <div className="pointer-events-none absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-sky-500/20 blur-[120px]" />
-        <div className="pointer-events-none absolute bottom-0 right-0 h-[28rem] w-[28rem] rounded-full bg-emerald-500/20 blur-[120px]" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#03060f]" />
+    <div className="bg-[#03040d] text-slate-100">
+      {/* ===================== HERO — CŒUR 3D ===================== */}
+      <section className="relative flex min-h-[100svh] flex-col overflow-hidden">
+        <AstralHeart />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,#03040d_85%)]" />
 
-        <div className="container relative z-10 flex flex-col items-center text-center">
-          <span className="animate-floaty mb-8 inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-sm font-medium text-emerald-200">
-            <Sparkles className="size-4" /> Soins infirmiers à domicile, réinventés
-          </span>
+        {/* micro-labels coins */}
+        <div className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-between px-6 md:px-10">
+          <Label>// INFIRMIER_TUNIS</Label>
+          <Label>SOINS · À · DOMICILE</Label>
+        </div>
 
-          <div className="relative mb-6">
-            <div className="relative mx-auto mb-6 flex size-20 items-center justify-center rounded-3xl glass">
-              <HeartPulse className="size-10 text-emerald-300" />
-              <span className="pulse-ring absolute inset-0" />
-            </div>
-          </div>
+        {/* contenu */}
+        <div className="container relative z-10 flex flex-1 flex-col items-center justify-center text-center">
+          <Reveal>
+            <span className="mb-7 inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-sm font-medium text-emerald-200">
+              <HeartPulse className="size-4 text-rose-400" /> La santé, au rythme de votre cœur
+            </span>
+          </Reveal>
 
-          <h1 className="max-w-4xl text-balance text-5xl font-extrabold leading-tight tracking-tight md:text-7xl">
-            Un infirmier qualifié,
+          <h1 className="max-w-4xl text-balance text-5xl font-extrabold leading-[1.05] tracking-tight md:text-8xl">
+            <span className="gradient-text text-glow">Prenons soin</span>
             <br />
-            <span className="gradient-text text-glow">à votre porte</span>, en un instant.
+            de vous, chez vous.
           </h1>
 
           <p className="mt-7 max-w-xl text-lg text-slate-300/90">
-            Réservez en quelques clics un infirmier près de chez vous. Pansement,
-            injection, prise de sang… à domicile, en toute confiance, partout en Tunisie.
+            Un infirmier qualifié à votre porte en quelques clics. Pansement,
+            injection, prise de sang… partout en Tunisie, en toute confiance.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/search"
-              className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-8 py-3.5 font-semibold text-white shadow-[0_0_40px_-8px_rgba(56,189,248,0.7)] transition-transform hover:scale-105"
+              className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-8 py-3.5 font-semibold text-white shadow-[0_0_45px_-8px_rgba(56,189,248,0.8)] transition-transform hover:scale-105"
             >
               <Stethoscope className="size-5" /> Trouver un infirmier
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
               href="/register?role=NURSE"
               className="inline-flex items-center gap-2 rounded-full glass px-8 py-3.5 font-semibold text-white transition-colors hover:bg-white/10"
             >
-              Devenir infirmier partenaire
+              Devenir partenaire
             </Link>
           </div>
+        </div>
 
-          <div className="mt-20 flex animate-blink flex-col items-center text-slate-400">
-            <span className="text-xs uppercase tracking-widest">Découvrir</span>
+        <div className="pointer-events-none absolute inset-x-0 bottom-7 z-10 flex items-end justify-between px-6 md:px-10">
+          <Label>TUNISIE — 24/7</Label>
+          <div className="flex animate-blink flex-col items-center text-slate-400">
             <ChevronDown className="size-5" />
           </div>
+          <Label>WEBGL · ASTRAL</Label>
         </div>
       </section>
 
@@ -110,11 +121,11 @@ export default function HomePage() {
 
       {/* ===================== COMMENT ÇA MARCHE ===================== */}
       <section className="container py-28">
+        <Reveal className="mb-4 text-center"><Label>/ PARCOURS PATIENT</Label></Reveal>
         <Reveal className="mb-16 text-center">
           <h2 className="text-4xl font-bold md:text-5xl">
             Comment ça <span className="gradient-text">marche</span> ?
           </h2>
-          <p className="mt-4 text-slate-400">Quatre étapes, zéro friction.</p>
         </Reveal>
         <div className="grid gap-6 md:grid-cols-4">
           {STEPS.map((s, i) => (
@@ -123,9 +134,7 @@ export default function HomePage() {
                 <div className="mb-4 flex size-14 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/20 to-emerald-500/20 text-emerald-300 transition-transform group-hover:scale-110">
                   <s.icon className="size-6" />
                 </div>
-                <span className="text-xs font-bold tracking-widest text-sky-400">
-                  ÉTAPE {i + 1}
-                </span>
+                <span className="font-mono text-xs font-bold tracking-widest text-sky-400">0{i + 1}</span>
                 <h3 className="mt-1 text-lg font-semibold">{s.title}</h3>
                 <p className="mt-2 text-sm text-slate-400">{s.text}</p>
               </div>
@@ -138,6 +147,7 @@ export default function HomePage() {
       <section className="relative overflow-hidden py-28">
         <div className="pointer-events-none absolute left-1/2 top-1/2 h-[30rem] w-[30rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-600/10 blur-[120px]" />
         <div className="container relative">
+          <Reveal className="mb-4 text-center"><Label>/ NOTRE PROMESSE</Label></Reveal>
           <Reveal className="mb-16 text-center">
             <h2 className="text-4xl font-bold md:text-5xl">
               Pensé pour votre <span className="gradient-text">tranquillité</span>
@@ -174,7 +184,7 @@ export default function HomePage() {
               href="/search"
               className="mt-9 inline-flex items-center gap-2 rounded-full bg-white px-9 py-4 font-semibold text-slate-900 shadow-2xl transition-transform hover:scale-105"
             >
-              <HeartPulse className="size-5 text-emerald-500" /> Réserver maintenant
+              <HeartPulse className="size-5 text-rose-500" /> Réserver maintenant
             </Link>
           </div>
         </Reveal>

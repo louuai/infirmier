@@ -3,15 +3,21 @@
 import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
 import L from "leaflet";
 
-// Icône par défaut Leaflet (corrige les chemins cassés sous bundler).
-const icon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
+// Marqueur lumineux "astral" (divIcon) — patient en cyan, infirmiers en émeraude.
+const glowIcon = (color: string, ring: string) =>
+  L.divIcon({
+    className: "",
+    html: `<div style="position:relative;width:18px;height:18px">
+      <span style="position:absolute;inset:-8px;border-radius:9999px;background:${ring};filter:blur(6px);opacity:.7"></span>
+      <span style="position:absolute;inset:0;border-radius:9999px;background:${color};box-shadow:0 0 12px ${color},0 0 22px ${color};border:2px solid rgba(255,255,255,.85)"></span>
+    </div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -12],
+  });
+
+const meIcon = glowIcon("#35a8ff", "rgba(53,168,255,.6)");
+const nurseIcon = glowIcon("#2fe0a6", "rgba(47,224,166,.6)");
 
 interface MapNurse {
   id: string;
@@ -31,19 +37,23 @@ export default function NursesMap({ center, radiusKm, nurses }: Props) {
   return (
     <MapContainer center={center} zoom={12} scrollWheelZoom className="h-full w-full">
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; OpenStreetMap &copy; CARTO'
+        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
       />
-      <Marker position={center} icon={icon}>
+      <Marker position={center} icon={meIcon}>
         <Popup>Votre position</Popup>
       </Marker>
       {radiusKm && (
-        <Circle center={center} radius={radiusKm * 1000} pathOptions={{ color: "#1f9bcf", fillOpacity: 0.05 }} />
+        <Circle
+          center={center}
+          radius={radiusKm * 1000}
+          pathOptions={{ color: "#35a8ff", fillColor: "#2fe0a6", fillOpacity: 0.06, weight: 1 }}
+        />
       )}
       {nurses
         .filter((n) => n.latitude != null && n.longitude != null)
         .map((n) => (
-          <Marker key={n.id} position={[n.latitude!, n.longitude!]} icon={icon}>
+          <Marker key={n.id} position={[n.latitude!, n.longitude!]} icon={nurseIcon}>
             <Popup>
               <strong>
                 {n.user.firstName} {n.user.lastName}

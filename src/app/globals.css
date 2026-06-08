@@ -111,3 +111,13 @@
   border: 2px solid rgba(47, 224, 166, 0.6);
   animation: pulse-ring 2.6s ease-out infinite;
 }
+
+/* Leaflet — popups sombres pour le thème astral */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #0b1220;
+  color: #e2e8f0;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+.leaflet-popup-content a { color: #5eead4; font-weight: 600; }
+.leaflet-container { background: #03040d; }

@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Infirmier Tunis",
+    "slug": "infirmier-tunis",
+    "scheme": "infirmiertunis",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": { "image": "./assets/icon.png", "resizeMode": "contain", "backgroundColor": "#03040d" },
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": true, "bundleIdentifier": "tn.infirmier.app", "infoPlist": { "NSLocationWhenInUseUsageDescription": "Pour trouver les infirmiers proches et le suivi en temps réel." } },
+    "android": {
+      "package": "tn.infirmier.app",
+      "adaptiveIcon": { "foregroundImage": "./assets/icon.png", "backgroundColor": "#03040d" },
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "FOREGROUND_SERVICE"]
+    },
+    "web": { "bundler": "metro", "output": "static", "favicon": "./assets/icon.png" },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-location", { "locationWhenInUsePermission": "Pour la recherche géolocalisée et le suivi temps réel." }],
+      ["expo-notifications", { "icon": "./assets/icon.png", "color": "#2fe0a6" }]
+    ],
+    "extra": {
+      "router": {},
+      "eas": { "projectId": "" }
+    }
+  }
+}

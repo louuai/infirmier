@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
     });
 
     const res = created({
+      token,
       user: {
         id: user.id,
         email: user.email,

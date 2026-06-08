@@ -182,3 +182,56 @@ npm run db:seed        # données de démo
 ---
 
 Fait avec ❤️ pour améliorer l'accès aux soins à domicile en Tunisie.
+
+---
+
+## 🔁 v2 — Workflow type Uber (mise à jour majeure)
+
+Le parcours est désormais à la demande, comme Uber/InDrive adapté aux soins :
+
+1. Le client arrive (sans compte obligatoire) → **Trouver un infirmier**.
+2. Il choisit un **service** (catalogue à tarif fixe, géré par l'admin).
+3. **Géolocalisation automatique** → infirmiers **disponibles** proposant ce service, triés par distance puis note.
+4. Il choisit un infirmier et **envoie une demande** (en invité : nom + téléphone).
+5. L'infirmier **accepte/refuse**. À l'acceptation → **facture générée**, statut `AWAITING_PAYMENT`.
+6. Le client **se connecte et paie** (le paiement n'intervient qu'après acceptation).
+7. L'infirmier passe **EN_ROUTE** → partage sa **position GPS temps réel**.
+8. Le client **suit l'infirmier sur la carte** (`/track/[bookingId]`), distance + ETA.
+9. `ARRIVED` → `IN_PROGRESS` → `COMPLETED` → le client laisse un **avis**.
+
+### Services & tarifs (centralisés)
+
+Plus de champ libre « spécialité ». Le client choisit parmi les services de la table `Service`.
+L'**admin** gère tout dans *Admin → Services & tarifs* : créer, modifier le prix, activer/désactiver, supprimer.
+
+### Commission
+
+**20 % plateforme / 80 % infirmier** (`PLATFORM_COMMISSION_RATE=20`). Chaque mission terminée crée
+une ligne `Commission`, une `Revenue` (analytics) et un `Payout` (à verser à l'infirmier).
+
+### Nouvelles entités Prisma
+
+`Service`, `NurseService`, `Payout`, `Revenue`, `TrackingSession`, `LiveLocation`, `Favorite`
++ `Booking` (invité + statuts du workflow) + `NurseProfile` (disponibilité `AVAILABLE/BUSY/OFFLINE`, position GPS temps réel).
+
+### Temps réel (Pusher)
+
+Le suivi live utilise **Pusher** (managé, compatible Vercel). Sans clés configurées, l'app
+retombe automatiquement sur du **polling** (rafraîchissement toutes les 5 s) — rien ne casse.
+Variables : `PUSHER_APP_ID`, `PUSHER_KEY`, `PUSHER_SECRET`, `PUSHER_CLUSTER`,
+`NEXT_PUBLIC_PUSHER_KEY`, `NEXT_PUBLIC_PUSHER_CLUSTER`.
+
+### Connexion Google
+
+Bouton **« Continuer avec Google »** (OAuth). Crée la clé dans Google Cloud Console
+(OAuth 2.0, redirect `…/api/auth/google/callback`) puis renseigne `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+
+### Paiement (extensible)
+
+Abstraction `PaymentGateway` : `mock` (par défaut), `flouci`, `d17`, `card`, `konnect`.
+Choix via `PAYMENT_PROVIDER`. Les fournisseurs réels sont des squelettes prêts à brancher.
+
+### À venir (phases suivantes)
+
+Notifications email/SMS (architecture en place via `Notification`), factures PDF,
+dashboard analytics graphique, favoris/support côté client, **application mobile Expo**.

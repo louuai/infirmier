@@ -1,11 +1,10 @@
 // ============================================================
-//  Infirmier Tunis - Schéma Prisma
-//  Marketplace de soins infirmiers à domicile
+//  Infirmier Tunis - Schéma Prisma v2
+//  Marketplace de soins infirmiers à domicile (workflow type Uber)
 // ============================================================
 
 generator client {
   provider      = "prisma-client-js"
-  // "native" pour le dev local ; cibles RHEL pour le runtime Vercel/Lambda
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
@@ -23,19 +22,28 @@ enum Role {
 }
 
 enum NurseVerificationStatus {
-  PENDING   // documents soumis, en attente
-  APPROVED  // validé par l'admin
-  REJECTED  // refusé
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NurseAvailability {
+  AVAILABLE
+  BUSY
+  OFFLINE
 }
 
 enum BookingStatus {
-  PENDING_NURSE   // créée, en attente de réponse infirmier
-  ACCEPTED        // acceptée par l'infirmier
-  REFUSED         // refusée par l'infirmier
-  IN_PROGRESS     // visite en cours
-  COMPLETED       // visite terminée
-  CANCELLED       // annulée par le patient
-  EXPIRED         // expirée sans réponse
+  REQUESTED        // demande envoyée à l'infirmier
+  REFUSED          // refusée par l'infirmier
+  AWAITING_PAYMENT // acceptée → facture générée, en attente de paiement
+  PAID             // payée → prête à démarrer
+  EN_ROUTE         // infirmier en route (tracking actif)
+  ARRIVED          // infirmier arrivé
+  IN_PROGRESS      // soin en cours
+  COMPLETED        // mission terminée
+  CANCELLED        // annulée par le client
+  EXPIRED          // sans réponse
 }
 
 enum PaymentStatus {
@@ -48,12 +56,19 @@ enum PaymentStatus {
 enum PaymentProvider {
   MOCK
   FLOUCI
+  D17
+  CARD
   KONNECT
 }
 
 enum CommissionStatus {
-  PENDING    // en attente de versement à l'infirmier
-  SETTLED    // versée à l'infirmier
+  PENDING
+  SETTLED
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
 }
 
 enum InvoiceStatus {
@@ -63,15 +78,16 @@ enum InvoiceStatus {
 }
 
 enum NotificationType {
-  BOOKING_CREATED
-  BOOKING_ACCEPTED
-  BOOKING_REFUSED
-  BOOKING_CANCELLED
-  BOOKING_COMPLETED
+  REQUEST_RECEIVED
+  REQUEST_ACCEPTED
+  REQUEST_REFUSED
   PAYMENT_RECEIVED
+  NURSE_EN_ROUTE
+  NURSE_ARRIVED
+  MISSION_COMPLETED
+  REVIEW_RECEIVED
   DOCUMENT_VERIFIED
   DOCUMENT_REJECTED
-  REVIEW_RECEIVED
   GENERIC
 }
 
@@ -90,12 +106,13 @@ enum DayOfWeek {
   SUNDAY
 }
 
-// ===================== MODELS =====================
+// ===================== USERS =====================
 
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
-  passwordHash String
+  passwordHash String?  // null si compte créé via Google
+  googleId     String?  @unique
   role         Role     @default(PATIENT)
   firstName    String
   lastName     String
@@ -105,77 +122,75 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  patientProfile PatientProfile?
-  nurseProfile   NurseProfile?
-
-  // Réservations passées en tant que patient
-  bookingsAsPatient Booking[] @relation("PatientBookings")
-
-  reviewsWritten Review[]       @relation("ReviewAuthor")
-  notifications  Notification[]
+  patientProfile    PatientProfile?
+  nurseProfile      NurseProfile?
+  bookingsAsPatient Booking[]       @relation("PatientBookings")
+  reviewsWritten    Review[]        @relation("ReviewAuthor")
+  notifications     Notification[]
+  favorites         Favorite[]
 
   @@index([role])
   @@map("users")
 }
 
 model PatientProfile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Adresse / géolocalisation
-  address   String?
-  city      String?
-  latitude  Float?
-  longitude Float?
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address     String?
+  city        String?
+  latitude    Float?
+  longitude   Float?
   dateOfBirth DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([city])
   @@map("patient_profiles")
 }
 
 model NurseProfile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  bio          String?
-  specialties  String[] // ex: ["Pansement", "Injection", "Prise de sang"]
-  yearsOfExperience Int  @default(0)
-  pricePerVisit     Float @default(0) // en TND
+  bio               String?
+  yearsOfExperience Int     @default(0)
 
-  // Zone d'intervention / géolocalisation
-  city          String?
-  address       String?
-  latitude      Float?
-  longitude     Float?
-  interventionRadiusKm Float @default(10)
+  // Localisation de base + position temps réel
+  city                 String?
+  address              String?
+  latitude             Float?
+  longitude            Float?
+  interventionRadiusKm Float   @default(15)
+  currentLat           Float?
+  currentLng           Float?
+  lastSeenAt           DateTime?
 
-  // Vérification documents
+  availability       NurseAvailability       @default(OFFLINE)
   verificationStatus NurseVerificationStatus @default(PENDING)
   verifiedAt         DateTime?
-  isAvailable        Boolean @default(true)
 
-  // Note moyenne (dénormalisée pour perf)
   ratingAverage Float @default(0)
   ratingCount   Int   @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  documents       NurseDocument[]
-  availabilities  Availability[]
-  bookings        Booking[]        @relation("NurseBookings")
-  reviews         Review[]         @relation("ReviewNurse")
-  commissions     Commission[]
-  invoices        Invoice[]
+  documents      NurseDocument[]
+  availabilities Availability[]
+  services       NurseService[]
+  bookings       Booking[]        @relation("NurseBookings")
+  reviews        Review[]         @relation("ReviewNurse")
+  commissions    Commission[]
+  invoices       Invoice[]
+  payouts        Payout[]
+  liveLocations  LiveLocation[]
+  favoritedBy    Favorite[]
 
   @@index([city])
   @@index([verificationStatus])
-  @@index([isAvailable])
+  @@index([availability])
   @@map("nurse_profiles")
 }
 
@@ -197,113 +212,228 @@ model Availability {
   nurseId   String
   nurse     NurseProfile @relation(fields: [nurseId], references: [id], onDelete: Cascade)
   dayOfWeek DayOfWeek
-  startTime String       // "08:00"
-  endTime   String       // "17:00"
+  startTime String
+  endTime   String
 
   @@unique([nurseId, dayOfWeek, startTime])
   @@index([nurseId])
   @@map("availabilities")
 }
 
-model Booking {
-  id          String        @id @default(cuid())
-  patientId   String
-  patient     User          @relation("PatientBookings", fields: [patientId], references: [id])
-  nurseId     String
-  nurse       NurseProfile  @relation("NurseBookings", fields: [nurseId], references: [id])
+// ===================== SERVICES (tarifs gérés par l'admin) =====================
 
-  status      BookingStatus @default(PENDING_NURSE)
-  scheduledAt DateTime
-  serviceType String        // ex: "Pansement"
+model Service {
+  id          String   @id @default(cuid())
+  slug        String   @unique // ex: "injections"
+  name        String
+  description String?
+  price       Float    // tarif fixé par l'admin (TND)
+  active      Boolean  @default(true)
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  nurses   NurseService[]
+  bookings Booking[]
+
+  @@map("services")
+}
+
+model NurseService {
+  id        String       @id @default(cuid())
+  nurseId   String
+  nurse     NurseProfile @relation(fields: [nurseId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([nurseId, serviceId])
+  @@index([serviceId])
+  @@map("nurse_services")
+}
+
+// ===================== BOOKINGS =====================
+
+model Booking {
+  id String @id @default(cuid())
+
+  // Patient connecté (optionnel : la demande peut être créée en invité)
+  patientId String?
+  patient   User?  @relation("PatientBookings", fields: [patientId], references: [id])
+
+  // Coordonnées invité (avant connexion)
+  guestName  String?
+  guestPhone String?
+  guestEmail String?
+
+  nurseId   String
+  nurse     NurseProfile @relation("NurseBookings", fields: [nurseId], references: [id])
+  serviceId String
+  service   Service      @relation(fields: [serviceId], references: [id])
+
+  status      BookingStatus @default(REQUESTED)
+  scheduledAt DateTime?
   notes       String?
 
-  // Adresse de la visite (snapshot)
-  address     String
-  city        String?
-  latitude    Float?
-  longitude   Float?
+  // Adresse de la visite
+  address   String
+  city      String?
+  latitude  Float?
+  longitude Float?
 
-  // Montants (TND)
-  price       Float
-  commissionRate   Float   // % au moment de la réservation
+  // Montants figés (TND)
+  price            Float
+  commissionRate   Float
   commissionAmount Float
   nurseAmount      Float
 
-  cancelledAt   DateTime?
-  cancelReason  String?
-  completedAt   DateTime?
+  acceptedAt  DateTime?
+  paidAt      DateTime?
+  enRouteAt   DateTime?
+  arrivedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  cancelReason String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  payment    Payment?
-  invoice    Invoice?
-  review     Review?
-  commission Commission?
+  payment         Payment?
+  invoice         Invoice?
+  review          Review?
+  commission      Commission?
+  revenue         Revenue?
+  trackingSession TrackingSession?
+  liveLocations   LiveLocation[]
 
   @@index([patientId])
   @@index([nurseId])
   @@index([status])
-  @@index([scheduledAt])
+  @@index([serviceId])
   @@map("bookings")
 }
 
+// ===================== PAIEMENTS / FINANCES =====================
+
 model Payment {
-  id        String          @id @default(cuid())
-  bookingId String          @unique
-  booking   Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-
-  amount    Float
-  currency  String          @default("TND")
-  status    PaymentStatus   @default(PENDING)
-  provider  PaymentProvider @default(MOCK)
-  providerRef String?       // ID transaction du fournisseur
-  paidAt    DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String          @id @default(cuid())
+  bookingId   String          @unique
+  booking     Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount      Float
+  currency    String          @default("TND")
+  status      PaymentStatus   @default(PENDING)
+  provider    PaymentProvider @default(MOCK)
+  providerRef String?
+  paidAt      DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@index([status])
   @@map("payments")
 }
 
+model Invoice {
+  id          String        @id @default(cuid())
+  number      String        @unique
+  bookingId   String        @unique
+  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  nurseId     String
+  nurse       NurseProfile  @relation(fields: [nurseId], references: [id])
+  amount      Float
+  commission  Float
+  nurseAmount Float
+  status      InvoiceStatus @default(ISSUED)
+  pdfUrl      String?
+  issuedAt    DateTime      @default(now())
+
+  @@index([nurseId])
+  @@map("invoices")
+}
+
 model Commission {
-  id            String           @id @default(cuid())
-  bookingId     String           @unique
-  booking       Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  nurseId       String
-  nurse         NurseProfile     @relation(fields: [nurseId], references: [id])
-
-  rate          Float            // % prélevé
-  platformAmount Float           // part plateforme (10%)
-  nurseAmount   Float            // part infirmier (90%)
-  status        CommissionStatus @default(PENDING)
-  settledAt     DateTime?
-
-  createdAt DateTime @default(now())
+  id             String           @id @default(cuid())
+  bookingId      String           @unique
+  booking        Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  nurseId        String
+  nurse          NurseProfile     @relation(fields: [nurseId], references: [id])
+  rate           Float
+  platformAmount Float
+  nurseAmount    Float
+  status         CommissionStatus @default(PENDING)
+  settledAt      DateTime?
+  createdAt      DateTime         @default(now())
 
   @@index([nurseId])
   @@index([status])
   @@map("commissions")
 }
 
-model Invoice {
-  id        String        @id @default(cuid())
-  number    String        @unique // ex: INV-2026-000123
-  bookingId String        @unique
-  booking   Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  nurseId   String
-  nurse     NurseProfile  @relation(fields: [nurseId], references: [id])
-
-  amount       Float
-  commission   Float
-  nurseAmount  Float
-  status       InvoiceStatus @default(ISSUED)
-  issuedAt     DateTime      @default(now())
+model Payout {
+  id          String       @id @default(cuid())
+  nurseId     String
+  nurse       NurseProfile @relation(fields: [nurseId], references: [id], onDelete: Cascade)
+  amount      Float
+  status      PayoutStatus @default(PENDING)
+  periodStart DateTime?
+  periodEnd   DateTime?
+  createdAt   DateTime     @default(now())
+  paidAt      DateTime?
 
   @@index([nurseId])
-  @@map("invoices")
+  @@index([status])
+  @@map("payouts")
 }
+
+// Ligne de revenu par mission (pour l'analytics)
+model Revenue {
+  id             String   @id @default(cuid())
+  bookingId      String   @unique
+  booking        Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  grossAmount    Float
+  platformAmount Float
+  nurseAmount    Float
+  serviceSlug    String
+  city           String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([serviceSlug])
+  @@map("revenues")
+}
+
+// ===================== TRACKING TEMPS RÉEL =====================
+
+model TrackingSession {
+  id         String    @id @default(cuid())
+  bookingId  String    @unique
+  booking    Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  nurseId    String
+  active     Boolean   @default(true)
+  lastLat    Float?
+  lastLng    Float?
+  lastUpdate DateTime?
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+
+  @@index([nurseId])
+  @@map("tracking_sessions")
+}
+
+model LiveLocation {
+  id        String       @id @default(cuid())
+  nurseId   String
+  nurse     NurseProfile @relation(fields: [nurseId], references: [id], onDelete: Cascade)
+  bookingId String?
+  booking   Booking?     @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  latitude  Float
+  longitude Float
+  createdAt DateTime     @default(now())
+
+  @@index([nurseId])
+  @@index([bookingId])
+  @@map("live_locations")
+}
+
+// ===================== AVIS / FAVORIS / NOTIFS =====================
 
 model Review {
   id        String       @id @default(cuid())
@@ -313,13 +443,24 @@ model Review {
   author    User         @relation("ReviewAuthor", fields: [authorId], references: [id])
   nurseId   String
   nurse     NurseProfile @relation("ReviewNurse", fields: [nurseId], references: [id])
-
-  rating    Int          // 1..5
+  rating    Int
   comment   String?
   createdAt DateTime     @default(now())
 
   @@index([nurseId])
   @@map("reviews")
+}
+
+model Favorite {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nurseId   String
+  nurse     NurseProfile @relation(fields: [nurseId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, nurseId])
+  @@map("favorites")
 }
 
 model Notification {

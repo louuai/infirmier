@@ -3,7 +3,6 @@
 import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
 import L from "leaflet";
 
-// Marqueur lumineux "astral" (divIcon) — patient en cyan, infirmiers en émeraude.
 const glowIcon = (color: string, ring: string) =>
   L.divIcon({
     className: "",
@@ -23,8 +22,8 @@ interface MapNurse {
   id: string;
   latitude: number | null;
   longitude: number | null;
-  pricePerVisit: number;
   user: { firstName: string; lastName: string };
+  etaMin?: number | null;
 }
 
 interface Props {
@@ -36,35 +35,18 @@ interface Props {
 export default function NursesMap({ center, radiusKm, nurses }: Props) {
   return (
     <MapContainer center={center} zoom={12} scrollWheelZoom className="h-full w-full">
-      <TileLayer
-        attribution='&copy; OpenStreetMap &copy; CARTO'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      />
-      <Marker position={center} icon={meIcon}>
-        <Popup>Votre position</Popup>
-      </Marker>
-      {radiusKm && (
-        <Circle
-          center={center}
-          radius={radiusKm * 1000}
-          pathOptions={{ color: "#35a8ff", fillColor: "#2fe0a6", fillOpacity: 0.06, weight: 1 }}
-        />
-      )}
-      {nurses
-        .filter((n) => n.latitude != null && n.longitude != null)
-        .map((n) => (
-          <Marker key={n.id} position={[n.latitude!, n.longitude!]} icon={nurseIcon}>
-            <Popup>
-              <strong>
-                {n.user.firstName} {n.user.lastName}
-              </strong>
-              <br />
-              {n.pricePerVisit} TND / visite
-              <br />
-              <a href={`/nurses/${n.id}`}>Voir le profil →</a>
-            </Popup>
-          </Marker>
-        ))}
+      <TileLayer attribution="&copy; OpenStreetMap &copy; CARTO" url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+      <Marker position={center} icon={meIcon}><Popup>Votre position</Popup></Marker>
+      {radiusKm && <Circle center={center} radius={radiusKm * 1000} pathOptions={{ color: "#35a8ff", fillColor: "#2fe0a6", fillOpacity: 0.06, weight: 1 }} />}
+      {nurses.filter((n) => n.latitude != null && n.longitude != null).map((n) => (
+        <Marker key={n.id} position={[n.latitude!, n.longitude!]} icon={nurseIcon}>
+          <Popup>
+            <strong>{n.user.firstName} {n.user.lastName}</strong>
+            {n.etaMin != null && <><br />~{n.etaMin} min</>}
+            <br /><a href={`/nurses/${n.id}`}>Voir le profil →</a>
+          </Popup>
+        </Marker>
+      ))}
     </MapContainer>
   );
 }

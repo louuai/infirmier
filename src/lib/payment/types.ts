@@ -22,7 +22,7 @@ export interface VerifyPaymentResult {
 
 /** Contrat commun à tous les fournisseurs de paiement. */
 export interface PaymentGateway {
-  readonly name: "MOCK" | "FLOUCI" | "KONNECT";
+  readonly name: "MOCK" | "FLOUCI" | "D17" | "CARD" | "KONNECT";
   init(params: InitPaymentParams): Promise<InitPaymentResult>;
   verify(providerRef: string): Promise<VerifyPaymentResult>;
 }

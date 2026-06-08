@@ -1,17 +1,17 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
-import { nurseProfileSchema, availabilitySchema } from "@/lib/validations";
+import { nurseProfileSchema, nurseLocationSchema } from "@/lib/validations";
 import { handleApiError } from "@/lib/errors";
 import { ok } from "@/lib/api";
 
-/** GET /api/nurses/me - profil de l'infirmier connecté. */
+/** GET /api/nurses/me — profil de l'infirmier connecté. */
 export async function GET(req: NextRequest) {
   try {
     const session = await requireRole(req, "NURSE");
     const nurse = await prisma.nurseProfile.findUnique({
       where: { userId: session.sub },
-      include: { availabilities: true, documents: true },
+      include: { services: { include: { service: true } }, documents: true, availabilities: true },
     });
     return ok({ nurse });
   } catch (err) {
@@ -19,36 +19,40 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/** PATCH /api/nurses/me - met à jour profil + disponibilités. */
+/** PATCH /api/nurses/me — profil, disponibilité, services proposés, position. */
 export async function PATCH(req: NextRequest) {
   try {
     const session = await requireRole(req, "NURSE");
     const body = await req.json();
 
-    const profileData = nurseProfileSchema.parse(body.profile ?? {});
-    let availabilities;
-    if (body.availabilities) {
-      availabilities = availabilitySchema.parse({
-        availabilities: body.availabilities,
-      }).availabilities;
+    // Mise à jour rapide de la position (tracking)
+    if (body.location) {
+      const loc = nurseLocationSchema.parse(body.location);
+      const nurse = await prisma.nurseProfile.update({
+        where: { userId: session.sub },
+        data: { currentLat: loc.latitude, currentLng: loc.longitude, lastSeenAt: new Date() },
+      });
+      return ok({ nurse });
     }
+
+    const data = nurseProfileSchema.parse(body.profile ?? body);
+    const { serviceIds, ...profile } = data;
 
     const nurse = await prisma.nurseProfile.update({
       where: { userId: session.sub },
       data: {
-        ...profileData,
-        ...(availabilities
+        ...profile,
+        ...(serviceIds
           ? {
-              availabilities: {
+              services: {
                 deleteMany: {},
-                create: availabilities,
+                create: serviceIds.map((serviceId) => ({ serviceId })),
               },
             }
           : {}),
       },
-      include: { availabilities: true },
+      include: { services: { include: { service: true } } },
     });
-
     return ok({ nurse });
   } catch (err) {
     return handleApiError(err);

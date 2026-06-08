@@ -1,137 +1,101 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Star, MapPin, Briefcase } from "lucide-react";
+import { Star, MapPin, Briefcase, ShieldCheck } from "lucide-react";
 import { formatTND } from "@/lib/utils";
 import { BookingForm } from "./booking-form";
 
-const DAYS: Record<string, string> = {
-  MONDAY: "Lundi", TUESDAY: "Mardi", WEDNESDAY: "Mercredi", THURSDAY: "Jeudi",
-  FRIDAY: "Vendredi", SATURDAY: "Samedi", SUNDAY: "Dimanche",
-};
-
 export default async function NurseDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ service?: string }>;
 }) {
   const { id } = await params;
+  const { service: preselectedServiceId } = await searchParams;
+
   const nurse = await prisma.nurseProfile.findUnique({
     where: { id },
     include: {
       user: { select: { firstName: true, lastName: true } },
-      availabilities: true,
+      services: { include: { service: true } },
       reviews: {
-        orderBy: { createdAt: "desc" },
-        take: 20,
+        orderBy: { createdAt: "desc" }, take: 20,
         include: { author: { select: { firstName: true, lastName: true } } },
       },
     },
   });
-
   if (!nurse || nurse.verificationStatus !== "APPROVED") notFound();
 
+  const services = nurse.services.map((s) => ({ id: s.service.id, name: s.service.name, price: s.service.price }));
+
   return (
-    <div className="container grid gap-8 py-10 lg:grid-cols-[1.5fr_1fr]">
-      <div className="space-y-6">
-        {/* En-tête */}
-        <Card>
-          <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center">
-            <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 text-2xl font-bold text-primary">
-              {nurse.user.firstName[0]}
-              {nurse.user.lastName[0]}
+    <div className="min-h-[calc(100vh-4rem)] bg-[#03040d] text-slate-100">
+      <div className="container grid gap-8 py-10 lg:grid-cols-[1.5fr_1fr]">
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 rounded-2xl glass p-6 sm:flex-row sm:items-center">
+            <div className="flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-sky-500/30 to-emerald-500/30 text-2xl font-bold text-white">
+              {nurse.user.firstName[0]}{nurse.user.lastName[0]}
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold">
-                {nurse.user.firstName} {nurse.user.lastName}
-              </h1>
-              <p className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <MapPin className="size-4" /> {nurse.city ?? "—"}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Briefcase className="size-4" /> {nurse.yearsOfExperience} ans d'exp.
-                </span>
-                <span className="flex items-center gap-1">
-                  <Star className="size-4 fill-amber-400 text-amber-400" />
-                  {nurse.ratingAverage.toFixed(1)} ({nurse.ratingCount})
-                </span>
+              <h1 className="text-2xl font-bold">{nurse.user.firstName} {nurse.user.lastName}</h1>
+              <p className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                <span className="flex items-center gap-1"><MapPin className="size-4" /> {nurse.city ?? "—"}</span>
+                <span className="flex items-center gap-1"><Briefcase className="size-4" /> {nurse.yearsOfExperience} ans</span>
+                <span className="flex items-center gap-1"><Star className="size-4 fill-amber-400 text-amber-400" /> {nurse.ratingAverage.toFixed(1)} ({nurse.ratingCount})</span>
               </p>
             </div>
-            <Badge variant="success">Vérifié</Badge>
-          </CardContent>
-        </Card>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-1 text-sm font-medium text-emerald-300"><ShieldCheck className="size-4" /> Vérifié</span>
+          </div>
 
-        {nurse.bio && (
-          <Card>
-            <CardHeader><CardTitle>À propos</CardTitle></CardHeader>
-            <CardContent className="text-muted-foreground">{nurse.bio}</CardContent>
-          </Card>
-        )}
+          {nurse.bio && (
+            <div className="rounded-2xl glass p-6">
+              <h2 className="mb-2 font-semibold">À propos</h2>
+              <p className="text-slate-400">{nurse.bio}</p>
+            </div>
+          )}
 
-        <Card>
-          <CardHeader><CardTitle>Spécialités</CardTitle></CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {nurse.specialties.map((s) => (
-              <Badge key={s} variant="outline">{s}</Badge>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Disponibilités</CardTitle></CardHeader>
-          <CardContent className="space-y-1 text-sm">
-            {nurse.availabilities.length === 0 ? (
-              <p className="text-muted-foreground">Non précisées.</p>
-            ) : (
-              nurse.availabilities.map((a) => (
-                <div key={a.id} className="flex justify-between border-b py-1 last:border-0">
-                  <span>{DAYS[a.dayOfWeek]}</span>
-                  <span className="text-muted-foreground">{a.startTime} – {a.endTime}</span>
+          <div className="rounded-2xl glass p-6">
+            <h2 className="mb-3 font-semibold">Services proposés</h2>
+            <div className="space-y-2">
+              {services.map((s) => (
+                <div key={s.id} className="flex items-center justify-between border-b border-white/5 py-2 last:border-0">
+                  <span className="text-slate-200">{s.name}</span>
+                  <span className="font-semibold text-emerald-300">{formatTND(s.price)}</span>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+              ))}
+            </div>
+          </div>
 
-        <Card>
-          <CardHeader><CardTitle>Avis des patients</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {nurse.reviews.length === 0 ? (
-              <p className="text-muted-foreground">Aucun avis pour le moment.</p>
-            ) : (
-              nurse.reviews.map((r) => (
-                <div key={r.id} className="border-b pb-3 last:border-0">
+          <div className="rounded-2xl glass p-6">
+            <h2 className="mb-3 font-semibold">Avis des patients</h2>
+            <div className="space-y-4">
+              {nurse.reviews.length === 0 ? (
+                <p className="text-slate-500">Aucun avis pour le moment.</p>
+              ) : nurse.reviews.map((r) => (
+                <div key={r.id} className="border-b border-white/5 pb-3 last:border-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{r.author.firstName} {r.author.lastName[0]}.</span>
                     <span className="flex">
                       {Array.from({ length: 5 }).map((_, i) => (
-                        <Star key={i} className={`size-4 ${i < r.rating ? "fill-amber-400 text-amber-400" : "text-muted"}`} />
+                        <Star key={i} className={`size-4 ${i < r.rating ? "fill-amber-400 text-amber-400" : "text-slate-700"}`} />
                       ))}
                     </span>
                   </div>
-                  {r.comment && <p className="mt-1 text-sm text-muted-foreground">{r.comment}</p>}
+                  {r.comment && <p className="mt-1 text-sm text-slate-400">{r.comment}</p>}
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
-      {/* Carte de réservation */}
-      <div className="lg:sticky lg:top-20 lg:h-fit">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-baseline justify-between">
-              <span>Réserver une visite</span>
-              <span className="text-primary">{formatTND(nurse.pricePerVisit)}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BookingForm nurseId={nurse.id} />
-          </CardContent>
-        </Card>
+        <div className="lg:sticky lg:top-20 lg:h-fit">
+          <div className="rounded-2xl glass p-6">
+            <h2 className="mb-1 text-lg font-semibold">Demander une visite</h2>
+            <p className="mb-4 text-sm text-slate-400">Sans engagement — vous payez seulement après acceptation.</p>
+            <BookingForm nurseId={nurse.id} services={services} preselectedServiceId={preselectedServiceId} />
+          </div>
+        </div>
       </div>
     </div>
   );

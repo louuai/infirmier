@@ -2,96 +2,67 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 import { cancelBookingSchema } from "@/lib/validations";
-import {
-  BadRequestError,
-  ForbiddenError,
-  NotFoundError,
-  handleApiError,
-} from "@/lib/errors";
+import { BadRequestError, ForbiddenError, NotFoundError, handleApiError } from "@/lib/errors";
 import { ok } from "@/lib/api";
 import { notify } from "@/lib/notifications";
 
-async function loadBookingForUser(id: string, userId: string) {
-  const booking = await prisma.booking.findUnique({
+async function load(id: string) {
+  const b = await prisma.booking.findUnique({
     where: { id },
     include: {
+      service: true,
       nurse: { include: { user: true } },
       patient: true,
       payment: true,
+      invoice: true,
+      trackingSession: true,
     },
   });
-  if (!booking) throw new NotFoundError("Réservation introuvable");
-  const isOwner =
-    booking.patientId === userId || booking.nurse.userId === userId;
-  if (!isOwner) throw new ForbiddenError();
-  return booking;
+  if (!b) throw new NotFoundError("Réservation introuvable");
+  return b;
 }
 
 /** GET /api/bookings/[id] */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireSession(req);
     const { id } = await params;
-    const booking = await loadBookingForUser(id, session.sub);
-    return ok({ booking });
+    const b = await load(id);
+    const owner = b.patientId === session.sub || b.nurse.userId === session.sub;
+    if (!owner) throw new ForbiddenError();
+    return ok({ booking: b });
   } catch (err) {
     return handleApiError(err);
   }
 }
 
-/**
- * DELETE /api/bookings/[id] - annulation par le patient.
- * Règle: annulable seulement si > 2h avant le créneau et statut non terminal.
- */
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+/** DELETE /api/bookings/[id] — annulation par le patient (avant EN_ROUTE). */
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireSession(req);
     const { id } = await params;
-    const booking = await loadBookingForUser(id, session.sub);
-
-    if (booking.patientId !== session.sub) {
-      throw new ForbiddenError("Seul le patient peut annuler");
+    const b = await load(id);
+    if (b.patientId !== session.sub) throw new ForbiddenError("Seul le patient peut annuler");
+    if (["EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "REFUSED"].includes(b.status)) {
+      throw new BadRequestError("Réservation non annulable à ce stade");
     }
-    const terminal = ["COMPLETED", "CANCELLED", "REFUSED", "EXPIRED"];
-    if (terminal.includes(booking.status)) {
-      throw new BadRequestError("Réservation non annulable");
-    }
-    const twoHours = 2 * 60 * 60 * 1000;
-    if (booking.scheduledAt.getTime() - Date.now() < twoHours) {
-      throw new BadRequestError(
-        "Annulation impossible à moins de 2h du rendez-vous",
-      );
-    }
-
-    const body = await req.json().catch(() => ({}));
-    const { reason } = cancelBookingSchema.parse(body);
-
+    const { reason } = cancelBookingSchema.parse(await req.json().catch(() => ({})));
     const updated = await prisma.booking.update({
       where: { id },
       data: {
         status: "CANCELLED",
         cancelledAt: new Date(),
         cancelReason: reason,
-        ...(booking.payment && booking.payment.status === "PAID"
-          ? { payment: { update: { status: "REFUNDED" } } }
-          : {}),
+        ...(b.payment?.status === "PAID" ? { payment: { update: { status: "REFUNDED" } } } : {}),
       },
     });
-
     await notify({
-      userId: booking.nurse.userId,
-      type: "BOOKING_CANCELLED",
+      userId: b.nurse.userId,
+      type: "GENERIC",
       title: "Réservation annulée",
-      message: "Le patient a annulé une visite.",
+      message: "Le client a annulé la demande.",
       metadata: { bookingId: id },
     });
-
     return ok({ booking: updated });
   } catch (err) {
     return handleApiError(err);

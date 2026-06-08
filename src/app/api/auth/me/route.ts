@@ -8,19 +8,12 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
     if (!session) throw new UnauthorizedError();
-
     const user = await prisma.user.findUnique({
       where: { id: session.sub },
       select: {
-        id: true,
-        email: true,
-        role: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        avatarUrl: true,
+        id: true, email: true, role: true, firstName: true, lastName: true, phone: true, avatarUrl: true,
         patientProfile: true,
-        nurseProfile: true,
+        nurseProfile: { include: { services: { include: { service: true } } } },
       },
     });
     return ok({ user });

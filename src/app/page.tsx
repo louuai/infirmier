@@ -58,7 +58,7 @@ export default function HomePage() {
 
         {/* micro-labels coins */}
         <div className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-between px-6 md:px-10">
-          <Label>// INFIRMIER_TUNIS</Label>
+          <Label>{"// INFIRMIER_TUNIS"}</Label>
           <Label>SOINS · À · DOMICILE</Label>
         </div>
 

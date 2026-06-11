@@ -1,56 +1,63 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useEffect, useState, useCallback } from "react";
-import { NurseCard } from "@/components/nurse-card";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatTND } from "@/lib/utils";
 import { Loader2, LocateFixed, ArrowLeft, Check } from "lucide-react";
 
-const NursesMap = dynamic(() => import("@/components/nurses-map"), {
-  ssr: false,
-  loading: () => <div className="h-full w-full animate-pulse rounded-2xl bg-white/5" />,
-});
-
 interface Service { id: string; slug: string; name: string; description: string | null; price: number; }
-interface Nurse {
-  id: string; city: string | null; yearsOfExperience: number;
-  ratingAverage: number; ratingCount: number; latitude: number | null; longitude: number | null;
-  distanceKm?: number | null; etaMin?: number | null; user: { firstName: string; lastName: string };
-}
-
-const TUNIS: [number, number] = [36.8065, 10.1815];
 
 export default function SearchPage() {
+  const router = useRouter();
   const [services, setServices] = useState<Service[]>([]);
   const [selected, setSelected] = useState<Service | null>(null);
-  const [nurses, setNurses] = useState<Nurse[]>([]);
+  const [logged, setLogged] = useState<boolean | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [coords, setCoords] = useState<[number, number] | null>(null);
-  const [radius] = useState(25);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({ address: "", city: "", notes: "", guestName: "", guestPhone: "", guestEmail: "" });
 
   useEffect(() => {
     fetch("/api/services").then((r) => r.json()).then((d) => setServices(d.data?.services ?? []));
+    fetch("/api/auth/me").then((r) => setLogged(r.ok));
   }, []);
 
-  const fetchNurses = useCallback(async (svc: Service, c: [number, number] | null) => {
-    setLoading(true);
-    const q = new URLSearchParams({ serviceSlug: svc.slug });
-    if (c) { q.set("lat", String(c[0])); q.set("lng", String(c[1])); q.set("radiusKm", String(radius)); }
-    const res = await fetch(`/api/nurses?${q.toString()}`);
-    const data = await res.json();
-    setNurses(data.data?.items ?? []);
-    setLoading(false);
-  }, [radius]);
-
-  function chooseService(svc: Service) {
-    setSelected(svc);
-    // géolocalisation automatique (type Uber)
+  function chooseService(s: Service) {
+    setSelected(s);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => { const c: [number, number] = [pos.coords.latitude, pos.coords.longitude]; setCoords(c); fetchNurses(svc, c); },
-        () => fetchNurses(svc, null),
+        (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
       );
-    } else fetchNurses(svc, null);
+    }
+  }
+
+  async function submit() {
+    if (!selected) return;
+    setError(null);
+    if (!form.address.trim()) { setError("Adresse requise"); return; }
+    if (logged === false && (!form.guestName.trim() || !form.guestPhone.trim())) {
+      setError("Nom et téléphone requis (sans compte)"); return;
+    }
+    setLoading(true);
+    const body: Record<string, unknown> = {
+      serviceId: selected.id,
+      address: form.address,
+      city: form.city || undefined,
+      notes: form.notes || undefined,
+      latitude: coords?.lat,
+      longitude: coords?.lng,
+    };
+    if (logged === false) {
+      body.guestName = form.guestName;
+      body.guestPhone = form.guestPhone;
+      body.guestEmail = form.guestEmail || undefined;
+    }
+    const res = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error ?? "Erreur"); return; }
+    router.push(`/request/${data.data.booking.id}`);
   }
 
   // ÉTAPE 1 — choix du service
@@ -60,17 +67,17 @@ export default function SearchPage() {
         <div className="container py-10">
           <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-slate-500">/ ÉTAPE 1 — SERVICE</p>
           <h1 className="mt-1 text-3xl font-bold md:text-4xl">De quel <span className="gradient-text">soin</span> avez-vous besoin ?</h1>
+          <p className="mt-2 text-slate-400">Choisissez un service. Votre demande sera envoyée aux infirmiers disponibles autour de vous — le premier qui accepte prend la mission.</p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {services.length === 0 && <p className="text-slate-500">Chargement des services…</p>}
+            {services.length === 0 && <p className="text-slate-500">Chargement…</p>}
             {services.map((s) => (
-              <button key={s.id} onClick={() => chooseService(s)}
-                className="group rounded-2xl glass p-6 text-left transition-all hover:-translate-y-1.5 hover:border-emerald-400/40">
+              <button key={s.id} onClick={() => chooseService(s)} className="group rounded-2xl glass p-6 text-left transition-all hover:-translate-y-1.5 hover:border-emerald-400/40">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-white">{s.name}</h3>
                   <span className="font-semibold text-emerald-300">{formatTND(s.price)}</span>
                 </div>
                 {s.description && <p className="mt-2 text-sm text-slate-400">{s.description}</p>}
-                <span className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-400">Choisir ce soin →</span>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-400">Demander →</span>
               </button>
             ))}
           </div>
@@ -79,46 +86,49 @@ export default function SearchPage() {
     );
   }
 
-  // ÉTAPE 2 — infirmiers disponibles autour
+  // ÉTAPE 2 — adresse + envoi de la demande
+  const inputCls = "h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-sky-400/60";
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#03040d] text-slate-100">
-      <div className="container py-8">
-        <button onClick={() => { setSelected(null); setNurses([]); }} className="mb-3 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
+      <div className="container max-w-xl py-8">
+        <button onClick={() => setSelected(null)} className="mb-3 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
           <ArrowLeft className="size-4" /> Changer de service
         </button>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-slate-500">/ ÉTAPE 2 — INFIRMIER DISPONIBLE</p>
-            <h1 className="mt-1 text-2xl font-bold md:text-3xl">
-              <span className="gradient-text">{selected.name}</span> · {formatTND(selected.price)}
-            </h1>
-          </div>
-          <span className="inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-sm text-emerald-200">
-            <Check className="size-4" /> Tarif fixe
-          </span>
-        </div>
+        <h1 className="text-2xl font-bold md:text-3xl"><span className="gradient-text">{selected.name}</span> · {formatTND(selected.price)}</h1>
+        <p className="mt-1 inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-sm text-emerald-200"><Check className="size-4" /> Tarif fixe · paiement après acceptation</p>
 
-        {!coords && (
-          <button onClick={() => chooseService(selected)} className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10">
-            <LocateFixed className="size-4" /> Activer ma géolocalisation
+        <div className="mt-6 space-y-3 rounded-2xl glass p-5">
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">Adresse de la visite</label>
+            <input className={inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Rue, ville…" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">Ville</label>
+            <input className={inputCls} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+          </div>
+          <button onClick={() => navigator.geolocation?.getCurrentPosition((p) => setCoords({ lat: p.coords.latitude, lng: p.coords.longitude }))}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm ${coords ? "border-emerald-400/40 text-emerald-300" : "border-white/15 text-white"}`}>
+            <LocateFixed className="size-4" /> {coords ? "Position détectée ✓" : "Me géolocaliser"}
           </button>
-        )}
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
           <div>
-            {loading ? (
-              <div className="flex justify-center py-20 text-slate-500"><Loader2 className="animate-spin" /></div>
-            ) : nurses.length === 0 ? (
-              <p className="py-20 text-center text-slate-500">Aucun infirmier disponible pour ce service autour de vous.</p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {nurses.map((n) => <NurseCard key={n.id} nurse={n} serviceId={selected.id} servicePrice={selected.price} />)}
-              </div>
-            )}
+            <label className="mb-1 block text-xs text-slate-400">Notes (optionnel)</label>
+            <input className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Précisions pour l'infirmier…" />
           </div>
-          <div className="sticky top-20 h-[600px] overflow-hidden rounded-2xl border border-white/10">
-            <NursesMap center={coords ?? TUNIS} radiusKm={coords ? radius : undefined} nurses={nurses} />
-          </div>
+
+          {logged === false && (
+            <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs text-slate-400">Vos coordonnées (sans créer de compte)</p>
+              <input className={inputCls} value={form.guestName} onChange={(e) => setForm({ ...form, guestName: e.target.value })} placeholder="Nom complet" />
+              <input className={inputCls} value={form.guestPhone} onChange={(e) => setForm({ ...form, guestPhone: e.target.value })} placeholder="Téléphone" />
+              <input className={inputCls} value={form.guestEmail} onChange={(e) => setForm({ ...form, guestEmail: e.target.value })} placeholder="Email (optionnel)" />
+            </div>
+          )}
+
+          {error && <p className="text-sm text-rose-400">{error}</p>}
+          <button onClick={submit} disabled={loading} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-3 font-semibold text-white disabled:opacity-50">
+            {loading ? <Loader2 className="size-5 animate-spin" /> : "Envoyer la demande"}
+          </button>
+          <p className="text-center text-xs text-slate-500">Aucun paiement maintenant. Vous payez seulement quand un infirmier accepte.</p>
         </div>
       </div>
     </div>

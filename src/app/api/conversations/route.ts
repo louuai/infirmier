@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
     if (bookingId) {
       const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { nurse: true } });
       if (!booking) throw new NotFoundError("Réservation introuvable");
+      if (!booking.nurseId || !booking.nurse) throw new BadRequestError("Aucun infirmier assigné");
       const isParticipant = booking.patientId === session.sub || booking.nurse.userId === session.sub;
       if (!isParticipant) throw new ForbiddenError();
       if (!["PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(booking.status)) {

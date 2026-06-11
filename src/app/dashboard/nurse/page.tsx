@@ -24,6 +24,7 @@ const AVAIL = [
 
 export default function NurseDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [available, setAvailable] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [tab, setTab] = useState<Tab>("home");
@@ -37,17 +38,33 @@ export default function NurseDashboard() {
   }, []);
 
   const load = useCallback(async () => {
-    const [b, p, s] = await Promise.all([
+    const [b, p, s, av] = await Promise.all([
       fetch("/api/bookings").then((r) => r.json()),
       fetch("/api/nurses/me").then((r) => r.json()),
       fetch("/api/services?all=1").then((r) => r.json()),
+      fetch("/api/bookings/available").then((r) => r.json()).catch(() => ({ data: { items: [] } })),
     ]);
     setBookings(b.data?.bookings ?? []);
     setProfile(p.data?.nurse ?? null);
     setAllServices(s.data?.services ?? []);
+    setAvailable(av.data?.items ?? []);
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Rafraîchit les demandes entrantes (dispatch) toutes les 5s
+  useEffect(() => {
+    const i = setInterval(() => {
+      fetch("/api/bookings/available").then((r) => r.json()).then((d) => setAvailable(d.data?.items ?? [])).catch(() => {});
+    }, 5000);
+    return () => clearInterval(i);
+  }, []);
+
+  async function claim(id: string) {
+    const res = await fetch(`/api/bookings/${id}/claim`, { method: "POST" });
+    if (!res.ok) { alert((await res.json()).error); }
+    load();
+  }
 
   async function setAvailability(availability: string) {
     await fetch("/api/nurses/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: { availability } }) });
@@ -83,7 +100,7 @@ export default function NurseDashboard() {
   const hasCin = docs.some((d) => d.type === "CIN");
 
   const tabs: [Tab, string][] = [
-    ["home", "Accueil"], ["requests", `Demandes (${requests.length})`],
+    ["home", "Accueil"], ["requests", `Demandes (${requests.length + available.length})`],
     ["documents", "Documents"], ["invoices", "Factures"], ["contact", "Contact admin"], ["profile", "Profil"],
   ];
 
@@ -139,7 +156,23 @@ export default function NurseDashboard() {
 
             {tab === "requests" && (
               <div className="space-y-3">
-                {requests.length === 0 && <p className="text-slate-500">Aucune demande en cours.</p>}
+                {available.length > 0 && (
+                  <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/5 p-4">
+                    <p className="mb-3 flex items-center gap-2 font-semibold text-emerald-300">🔔 Demandes entrantes ({available.length}) — premier à accepter !</p>
+                    <div className="space-y-2">
+                      {available.map((a) => (
+                        <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/5 p-4">
+                          <div>
+                            <p className="font-semibold text-white">{a.service.name} · <span className="text-emerald-300">{formatTND(a.nurseAmount)}</span> net</p>
+                            <p className="text-sm text-slate-400">{a.guestName ?? "Client"} · {a.address}{a.distanceKm != null ? ` · ${a.distanceKm} km` : ""}</p>
+                          </div>
+                          <Btn onClick={() => claim(a.id)}>Accepter</Btn>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {requests.length === 0 && available.length === 0 && <p className="text-slate-500">Aucune demande en cours.</p>}
                 {requests.map((b) => {
                   const client = b.patient ? `${b.patient.firstName} ${b.patient.lastName}` : b.guestName ?? "Client";
                   const phone = b.patient?.phone ?? b.guestPhone;

@@ -27,13 +27,15 @@ export async function POST(req: NextRequest) {
       throw new BadRequestError("La visite doit être terminée");
     }
     if (booking.review) throw new BadRequestError("Avis déjà laissé");
+    if (!booking.nurseId || !booking.nurse) throw new BadRequestError("Réservation sans infirmier");
+    const nurseId = booking.nurseId;
 
     const review = await prisma.$transaction(async (tx) => {
       const r = await tx.review.create({
         data: {
           bookingId: booking.id,
           authorId: session.sub,
-          nurseId: booking.nurseId,
+          nurseId,
           rating: input.rating,
           comment: input.comment,
         },
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
         _count: true,
       });
       await tx.nurseProfile.update({
-        where: { id: booking.nurseId },
+        where: { id: nurseId },
         data: {
           ratingAverage: Math.round((agg._avg.rating ?? 0) * 10) / 10,
           ratingCount: agg._count,
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
     });
 
     await notify({
-      userId: booking.nurse.userId,
+      userId: booking.nurse!.userId,
       type: "REVIEW_RECEIVED",
       title: "Nouvel avis reçu",
       message: `Vous avez reçu une note de ${input.rating}/5.`,

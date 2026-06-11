@@ -121,14 +121,7 @@ export default function AdminDashboard() {
         )}
 
         {tab === "users" && (
-          <div className="overflow-hidden rounded-2xl glass">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-white/10 text-left text-slate-400"><th className="p-3">Nom</th><th>Email</th><th>Rôle</th><th>Statut</th></tr></thead>
-              <tbody>
-                {users.map((u) => (<tr key={u.id} className="border-b border-white/5"><td className="p-3">{u.firstName} {u.lastName}</td><td>{u.email}</td><td>{u.role}</td><td>{u.isActive ? "Actif" : "Désactivé"}</td></tr>))}
-              </tbody>
-            </table>
-          </div>
+          <UserManager users={users} reload={() => fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.data?.users ?? []))} />
         )}
 
         {tab === "messages" && (
@@ -182,6 +175,129 @@ function ServicesManager({ services, reload }: { services: any[]; reload: () => 
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+const MONEY_KEYS = ["revenuBrut", "revenuNet", "aTransferer", "totalDepense"];
+const KEY_LABELS: Record<string, string> = {
+  missions: "Missions", revenuBrut: "Revenu brut", revenuNet: "Revenu net", aTransferer: "À transférer",
+  note: "Note moyenne", reservations: "Réservations", totalDepense: "Total dépensé",
+};
+
+function UserManager({ users, reload }: { users: any[]; reload: () => void }) {
+  const [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [detail, setDetail] = useState<any>(null);
+  const inputCls = "h-9 rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white outline-none focus:border-sky-400/60";
+
+  async function open(id: string) {
+    setSelected(id); setDetail(null);
+    const d = await fetch(`/api/admin/users/${id}`).then((r) => r.json());
+    setDetail(d.data);
+  }
+  async function create(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault(); const f = new FormData(e.currentTarget);
+    const res = await fetch("/api/admin/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      email: f.get("email"), password: f.get("password"), firstName: f.get("firstName"), lastName: f.get("lastName"),
+      phone: f.get("phone") || undefined, role: f.get("role"),
+    }) });
+    if (!res.ok) { alert((await res.json()).error); return; }
+    setCreating(false); reload();
+  }
+  async function transfer(nurseId: string) {
+    const res = await fetch("/api/admin/payouts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nurseId }) });
+    if (res.ok) { alert("Transfert effectué ✅"); if (selected) open(selected); } else alert((await res.json()).error);
+  }
+  async function patch(id: string, data: any) {
+    await fetch(`/api/admin/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    reload(); open(id);
+  }
+  async function remove(id: string) {
+    if (!confirm("Supprimer cet utilisateur ?")) return;
+    const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert((await res.json()).error); return; }
+    setSelected(null); setDetail(null); reload();
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div>
+        <button onClick={() => setCreating((v) => !v)} className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-2 text-sm font-semibold text-white"><Plus className="size-4" /> Nouvel utilisateur</button>
+        {creating && (
+          <form onSubmit={create} className="mt-3 grid gap-2 rounded-2xl glass p-4 sm:grid-cols-2">
+            <input name="firstName" placeholder="Prénom" required className={inputCls} />
+            <input name="lastName" placeholder="Nom" required className={inputCls} />
+            <input name="email" placeholder="Email" required className={inputCls} />
+            <input name="phone" placeholder="Téléphone" className={inputCls} />
+            <input name="password" type="password" placeholder="Mot de passe (8+)" required className={inputCls} />
+            <select name="role" className={inputCls}>
+              <option value="PATIENT" className="bg-[#0b1220]">Patient</option>
+              <option value="NURSE" className="bg-[#0b1220]">Infirmier</option>
+              <option value="ADMIN" className="bg-[#0b1220]">Admin</option>
+            </select>
+            <button className="rounded-full bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-white sm:col-span-2">Créer</button>
+          </form>
+        )}
+        <div className="mt-3 space-y-2">
+          {users.map((u) => (
+            <button key={u.id} onClick={() => open(u.id)} className={`block w-full rounded-2xl glass p-4 text-left transition ${selected === u.id ? "border-emerald-400/50" : "hover:bg-white/5"}`}>
+              <div className="flex items-center justify-between">
+                <div><p className="font-semibold text-white">{u.firstName} {u.lastName}</p><p className="text-xs text-slate-500">{u.email}</p></div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">{u.role}</span>
+                  {!u.isActive && <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-xs text-rose-300">désactivé</span>}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="lg:sticky lg:top-20 lg:h-fit">
+        {!selected ? (
+          <p className="text-slate-500">Cliquez sur un utilisateur pour voir sa fiche.</p>
+        ) : !detail ? (
+          <p className="text-slate-500">Chargement…</p>
+        ) : (
+          <div className="rounded-2xl glass p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-bold">{detail.user.firstName} {detail.user.lastName}</h3>
+                <p className="text-sm text-slate-400">{detail.user.email}</p>
+                <p className="mt-1 text-xs text-slate-500">{detail.user.role} · {detail.user.isActive ? "actif" : "désactivé"}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {Object.entries(detail.analytics ?? {}).map(([k, v]) => (
+                <div key={k} className="rounded-xl bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">{KEY_LABELS[k] ?? k}</p>
+                  <p className="mt-0.5 font-bold text-white">{MONEY_KEYS.includes(k) ? formatTND(Number(v)) : String(v)}</p>
+                </div>
+              ))}
+            </div>
+
+            {detail.pendingPayout > 0 && detail.user.nurseProfile && (
+              <button onClick={() => transfer(detail.user.nurseProfile.id)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-3 font-semibold text-white">
+                <Wallet className="size-5" /> Transférer {formatTND(detail.pendingPayout)} à l'infirmier
+              </button>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button onClick={() => patch(detail.user.id, { isActive: !detail.user.isActive })} className="rounded-full border border-white/15 px-4 py-1.5 text-sm text-white hover:bg-white/10">
+                {detail.user.isActive ? "Désactiver" : "Activer"}
+              </button>
+              <select defaultValue={detail.user.role} onChange={(e) => patch(detail.user.id, { role: e.target.value })} className={inputCls}>
+                <option value="PATIENT" className="bg-[#0b1220]">Patient</option>
+                <option value="NURSE" className="bg-[#0b1220]">Infirmier</option>
+                <option value="ADMIN" className="bg-[#0b1220]">Admin</option>
+              </select>
+              <button onClick={() => remove(detail.user.id)} className="rounded-full bg-rose-500/80 px-4 py-1.5 text-sm font-semibold text-white">Supprimer</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

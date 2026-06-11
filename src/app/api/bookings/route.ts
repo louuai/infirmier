@@ -1,14 +1,28 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionFromRequest } from "@/lib/session";
-import { createBookingSchema } from "@/lib/validations";
 import { BadRequestError, NotFoundError, UnauthorizedError, handleApiError } from "@/lib/errors";
 import { created, ok } from "@/lib/api";
 import { computeSplit } from "@/lib/config";
 import { notify } from "@/lib/notifications";
+import { trigger } from "@/lib/pusher";
 import { logger } from "@/lib/logger";
+import { z } from "zod";
 
-/** GET /api/bookings — réservations de l'utilisateur connecté (patient ou infirmier). */
+const createSchema = z.object({
+  serviceId: z.string().min(1),
+  scheduledAt: z.coerce.date().optional(),
+  notes: z.string().max(500).optional(),
+  address: z.string().min(3, "Adresse requise"),
+  city: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  guestName: z.string().min(2).optional(),
+  guestPhone: z.string().min(6).optional(),
+  guestEmail: z.string().email().optional(),
+});
+
+/** GET /api/bookings — réservations de l'utilisateur connecté (patient ou infirmier assigné). */
 export async function GET(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
@@ -35,23 +49,20 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/bookings — un client (connecté OU invité) envoie une demande.
- * Le paiement n'intervient qu'APRÈS acceptation par l'infirmier.
+ * POST /api/bookings — DISPATCH : le client (invité OU connecté) crée une demande
+ * pour un SERVICE. La demande part en SEARCHING et est diffusée à TOUS les infirmiers
+ * disponibles proposant ce service. Le premier qui accepte (claim) remporte la mission.
  */
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req); // peut être null (invité)
-    const input = createBookingSchema.parse(await req.json());
+    const input = createSchema.parse(await req.json());
 
     if (!session && (!input.guestName || !input.guestPhone)) {
       throw new BadRequestError("Nom et téléphone requis pour une demande sans compte");
     }
 
-    const [nurse, service] = await Promise.all([
-      prisma.nurseProfile.findUnique({ where: { id: input.nurseId } }),
-      prisma.service.findUnique({ where: { id: input.serviceId } }),
-    ]);
-    if (!nurse || nurse.verificationStatus !== "APPROVED") throw new NotFoundError("Infirmier indisponible");
+    const service = await prisma.service.findUnique({ where: { id: input.serviceId } });
     if (!service || !service.active) throw new NotFoundError("Service indisponible");
 
     const split = computeSplit(service.price);
@@ -62,9 +73,8 @@ export async function POST(req: NextRequest) {
         guestName: input.guestName,
         guestPhone: input.guestPhone,
         guestEmail: input.guestEmail,
-        nurseId: nurse.id,
         serviceId: service.id,
-        status: "REQUESTED",
+        status: "SEARCHING",
         scheduledAt: input.scheduledAt,
         notes: input.notes,
         address: input.address,
@@ -78,16 +88,31 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await notify({
-      userId: nurse.userId,
-      type: "REQUEST_RECEIVED",
-      title: "Nouvelle demande",
-      message: `Demande "${service.name}" à ${input.address}.`,
-      metadata: { bookingId: booking.id },
+    // Diffusion à tous les infirmiers éligibles (validés + disponibles + proposant le service)
+    const eligible = await prisma.nurseProfile.findMany({
+      where: {
+        verificationStatus: "APPROVED",
+        availability: "AVAILABLE",
+        services: { some: { serviceId: service.id } },
+      },
+      select: { id: true, userId: true },
     });
 
-    logger.info({ bookingId: booking.id }, "Demande créée");
-    return created({ booking });
+    await Promise.all(
+      eligible.map((n) =>
+        notify({
+          userId: n.userId,
+          type: "REQUEST_RECEIVED",
+          title: "Nouvelle demande disponible",
+          message: `${service.name} à ${input.address}. Premier à accepter !`,
+          metadata: { bookingId: booking.id, dispatch: true },
+        }),
+      ),
+    );
+    await Promise.all(eligible.map((n) => trigger(`nurse-${n.id}`, "dispatch", { bookingId: booking.id })));
+
+    logger.info({ bookingId: booking.id, eligible: eligible.length }, "Demande diffusée (dispatch)");
+    return created({ booking, dispatchedTo: eligible.length });
   } catch (err) {
     return handleApiError(err);
   }

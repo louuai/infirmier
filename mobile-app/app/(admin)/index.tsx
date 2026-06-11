@@ -24,11 +24,26 @@ export default function AdminHome() {
     <Screen>
       <Topbar title="Centre de contrôle" />
       {loading ? <ActivityIndicator color="#2fe0a6" /> : (
-        <View className="flex-row flex-wrap gap-3">
-          {cards.map(([l, v], i) => (
-            <Card key={i} className="w-[47%]"><Muted>{l as string}</Muted><Text className="mt-1 text-lg font-bold text-white">{String(v)}</Text></Card>
-          ))}
-        </View>
+        <>
+          <View className="flex-row flex-wrap gap-3">
+            {cards.map(([l, v], i) => (
+              <Card key={i} className="w-[47%]"><Muted>{l as string}</Muted><Text className="mt-1 text-lg font-bold text-white">{String(v)}</Text></Card>
+            ))}
+          </View>
+          <Text className="mb-2 mt-6 font-semibold text-white">Services populaires</Text>
+          {(stats?.popularServices ?? []).length === 0 ? (
+            <Muted>Pas encore de données (aucune mission terminée).</Muted>
+          ) : (
+            (stats.popularServices as any[]).map((p) => (
+              <Card key={p.slug} className="mb-2">
+                <View className="flex-row justify-between">
+                  <Text className="text-white">{p.slug}</Text>
+                  <Text className="text-emerald-300">{p.count} missions</Text>
+                </View>
+              </Card>
+            ))
+          )}
+        </>
       )}
     </Screen>
   );

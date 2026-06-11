@@ -22,7 +22,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   if (!booking) notFound();
 
   const allowed =
-    session!.role === "ADMIN" || booking.patientId === session!.sub || booking.nurse.userId === session!.sub;
+    session!.role === "ADMIN" || booking.patientId === session!.sub || booking.nurse?.userId === session!.sub;
   if (!allowed) redirect("/");
 
   const isInvoice = !!booking.invoice;
@@ -58,7 +58,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             </div>
             <div className="text-right">
               <p className="mb-1 font-semibold text-slate-900">Infirmier</p>
-              <p className="text-slate-600">{booking.nurse.user.firstName} {booking.nurse.user.lastName}</p>
+              <p className="text-slate-600">{booking.nurse ? `${booking.nurse.user.firstName} ${booking.nurse.user.lastName}` : "—"}</p>
             </div>
           </div>
 

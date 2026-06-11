@@ -8,12 +8,13 @@ import { Loader2, CreditCard, MapPin, Star } from "lucide-react";
 interface Booking {
   id: string; status: string; address: string; price: number; createdAt: string;
   service: { name: string };
-  nurse: { user: { firstName: string; lastName: string } };
+  nurse: { user: { firstName: string; lastName: string } } | null;
   invoice: { number: string } | null;
   review: { id: string } | null;
 }
 
 const LABEL: Record<string, { t: string; c: string }> = {
+  SEARCHING: { t: "Recherche d'un infirmier", c: "bg-amber-500/20 text-amber-300" },
   REQUESTED: { t: "En attente infirmier", c: "bg-amber-500/20 text-amber-300" },
   REFUSED: { t: "Refusée", c: "bg-rose-500/20 text-rose-300" },
   AWAITING_PAYMENT: { t: "À payer", c: "bg-amber-500/20 text-amber-300" },
@@ -78,13 +79,16 @@ export default function PatientDashboard() {
                 <div key={b.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl glass p-5">
                   <div>
                     <p className="font-semibold">{b.service.name}</p>
-                    <p className="text-sm text-slate-400">avec {b.nurse.user.firstName} {b.nurse.user.lastName} · {formatDate(b.createdAt)}</p>
+                    <p className="text-sm text-slate-400">{b.nurse ? `avec ${b.nurse.user.firstName} ${b.nurse.user.lastName}` : "recherche en cours"} · {formatDate(b.createdAt)}</p>
                     <p className="text-sm text-slate-500">{b.address}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-emerald-300">{formatTND(b.price)}</span>
                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${s.c}`}>{s.t}</span>
                     <Link href={`/invoices/${b.id}`} className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10">Facture</Link>
+                    {["SEARCHING", "AWAITING_PAYMENT"].includes(b.status) && (
+                      <Link href={`/request/${b.id}`} className="rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-3 py-1.5 text-xs font-semibold text-white">Voir la demande</Link>
+                    )}
                     {b.status === "AWAITING_PAYMENT" && (
                       <button onClick={() => pay(b.id)} disabled={paying === b.id} className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
                         <CreditCard className="size-4" /> {paying === b.id ? "..." : "Payer"}

@@ -31,6 +31,23 @@ export default function Bookings() {
     catch (e: any) { Alert.alert("Erreur", e.message); } finally { setPaying(null); }
   }
 
+  async function openChat(id: string) {
+    try {
+      const d = await api("/api/conversations", { method: "POST", body: { bookingId: id } });
+      router.push(`/chat/${d.data.conversationId}`);
+    } catch (e: any) { Alert.alert("Chat indisponible", e.message); }
+  }
+
+  function review(id: string) {
+    Alert.prompt?.("Votre avis", "Note de 1 à 5 :", async (val) => {
+      const rating = Math.max(1, Math.min(5, parseInt(val || "5", 10)));
+      try { await api("/api/reviews", { method: "POST", body: { bookingId: id, rating } }); Alert.alert("Merci pour votre avis !"); load(); }
+      catch (e: any) { Alert.alert("Erreur", e.message); }
+    }, "plain-text", "5");
+  }
+
+  const paidStatuses = ["PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"];
+
   return (
     <Screen>
       <Topbar title="Mes réservations" />
@@ -43,9 +60,11 @@ export default function Bookings() {
               <Badge text={s.t} tone={s.tone} />
             </View>
             <Muted>avec {b.nurse.user.firstName} {b.nurse.user.lastName} · {b.price} TND</Muted>
-            <View className="mt-3 flex-row gap-2">
+            <View className="mt-3 flex-row flex-wrap gap-2">
               {b.status === "AWAITING_PAYMENT" && <Button title="Payer" onPress={() => pay(b.id)} loading={paying === b.id} />}
               {["EN_ROUTE", "ARRIVED"].includes(b.status) && <Button title="Suivre" variant="ghost" onPress={() => router.push(`/track/${b.id}`)} />}
+              {paidStatuses.includes(b.status) && <Button title="Chat" variant="ghost" onPress={() => openChat(b.id)} />}
+              {b.status === "COMPLETED" && !b.review && <Button title="Laisser un avis" variant="ghost" onPress={() => review(b.id)} />}
             </View>
           </Card>
         );

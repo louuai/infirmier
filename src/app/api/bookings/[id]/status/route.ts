@@ -8,16 +8,15 @@ import { notify } from "@/lib/notifications";
 import { trigger, bookingChannel } from "@/lib/pusher";
 import type { BookingStatus } from "@prisma/client";
 
+// L'acceptation se fait via /claim (dispatch). Ici : étapes après paiement.
 const FLOW: Record<string, { from: BookingStatus; to: BookingStatus }> = {
-  accept: { from: "REQUESTED", to: "AWAITING_PAYMENT" },
-  refuse: { from: "REQUESTED", to: "REFUSED" },
   en_route: { from: "PAID", to: "EN_ROUTE" },
   arrived: { from: "EN_ROUTE", to: "ARRIVED" },
   start: { from: "ARRIVED", to: "IN_PROGRESS" },
   complete: { from: "IN_PROGRESS", to: "COMPLETED" },
 };
 
-/** PATCH /api/bookings/[id]/status — transitions pilotées par l'infirmier. */
+/** PATCH /api/bookings/[id]/status — transitions pilotées par l'infirmier (mission attribuée). */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireRole(req, "NURSE");
@@ -29,7 +28,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       include: { nurse: true, service: true },
     });
     if (!booking) throw new NotFoundError("Réservation introuvable");
-    if (booking.nurse.userId !== session.sub) throw new ForbiddenError();
+    if (!booking.nurseId || !booking.nurse || booking.nurse.userId !== session.sub) throw new ForbiddenError();
+    const nurseId = booking.nurseId;
 
     const t = FLOW[action];
     if (!t || booking.status !== t.from) {
@@ -37,48 +37,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      // ACCEPT → génère la facture
-      if (action === "accept") {
-        const count = await tx.invoice.count();
-        await tx.invoice.upsert({
-          where: { bookingId: id },
-          create: {
-            bookingId: id,
-            nurseId: booking.nurseId,
-            number: `INV-${new Date().getFullYear()}-${String(count + 1).padStart(6, "0")}`,
-            amount: booking.price,
-            commission: booking.commissionAmount,
-            nurseAmount: booking.nurseAmount,
-            status: "ISSUED",
-          },
-          update: {},
-        });
-      }
-
-      // EN_ROUTE → démarre la session de tracking + infirmier occupé
       if (action === "en_route") {
         await tx.trackingSession.upsert({
           where: { bookingId: id },
           create: {
             bookingId: id,
-            nurseId: booking.nurseId,
+            nurseId,
             active: true,
-            lastLat: booking.nurse.currentLat,
-            lastLng: booking.nurse.currentLng,
+            lastLat: booking.nurse!.currentLat,
+            lastLng: booking.nurse!.currentLng,
             lastUpdate: new Date(),
           },
           update: { active: true },
         });
-        await tx.nurseProfile.update({ where: { id: booking.nurseId }, data: { availability: "BUSY" } });
+        await tx.nurseProfile.update({ where: { id: nurseId }, data: { availability: "BUSY" } });
       }
 
-      // COMPLETE → commission + revenu + payout + clôture tracking + dispo
       if (action === "complete") {
         await tx.commission.upsert({
           where: { bookingId: id },
           create: {
             bookingId: id,
-            nurseId: booking.nurseId,
+            nurseId,
             rate: booking.commissionRate,
             platformAmount: booking.commissionAmount,
             nurseAmount: booking.nurseAmount,
@@ -97,21 +77,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           },
           update: {},
         });
-        await tx.payout.create({
-          data: { nurseId: booking.nurseId, amount: booking.nurseAmount, status: "PENDING" },
-        });
-        await tx.trackingSession.updateMany({
-          where: { bookingId: id },
-          data: { active: false, endedAt: new Date() },
-        });
-        await tx.nurseProfile.update({ where: { id: booking.nurseId }, data: { availability: "AVAILABLE" } });
+        await tx.payout.create({ data: { nurseId, amount: booking.nurseAmount, status: "PENDING" } });
+        await tx.trackingSession.updateMany({ where: { bookingId: id }, data: { active: false, endedAt: new Date() } });
+        await tx.nurseProfile.update({ where: { id: nurseId }, data: { availability: "AVAILABLE" } });
       }
 
       return tx.booking.update({
         where: { id },
         data: {
           status: t.to,
-          ...(action === "accept" ? { acceptedAt: new Date() } : {}),
           ...(action === "en_route" ? { enRouteAt: new Date() } : {}),
           ...(action === "arrived" ? { arrivedAt: new Date() } : {}),
           ...(action === "complete" ? { completedAt: new Date() } : {}),
@@ -119,7 +93,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       });
     });
 
-    // notifications + temps réel
     const notifyType = {
       accept: "REQUEST_ACCEPTED",
       refuse: "REQUEST_REFUSED",

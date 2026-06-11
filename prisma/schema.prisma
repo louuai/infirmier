@@ -34,7 +34,8 @@ enum NurseAvailability {
 }
 
 enum BookingStatus {
-  REQUESTED        // demande envoyée à l'infirmier
+  SEARCHING        // demande diffusée à tous les infirmiers du service (dispatch)
+  REQUESTED        // (legacy) demande envoyée à un infirmier précis
   REFUSED          // refusée par l'infirmier
   AWAITING_PAYMENT // acceptée → facture générée, en attente de paiement
   PAID             // payée → prête à démarrer
@@ -267,12 +268,13 @@ model Booking {
   guestPhone String?
   guestEmail String?
 
-  nurseId   String
-  nurse     NurseProfile @relation("NurseBookings", fields: [nurseId], references: [id])
+  // Infirmier : null tant que la demande est en dispatch (SEARCHING)
+  nurseId   String?
+  nurse     NurseProfile? @relation("NurseBookings", fields: [nurseId], references: [id])
   serviceId String
   service   Service      @relation(fields: [serviceId], references: [id])
 
-  status      BookingStatus @default(REQUESTED)
+  status      BookingStatus @default(SEARCHING)
   scheduledAt DateTime?
   notes       String?
 

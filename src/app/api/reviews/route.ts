@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
       // Recalcul de la moyenne dénormalisée.
       const agg = await tx.review.aggregate({
-        where: { nurseId: booking.nurseId },
+        where: { nurseId },
         _avg: { rating: true },
         _count: true,
       });

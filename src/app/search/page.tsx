@@ -20,6 +20,14 @@ export default function SearchPage() {
   useEffect(() => {
     fetch("/api/services").then((r) => r.json()).then((d) => setServices(d.data?.services ?? []));
     fetch("/api/auth/me").then((r) => setLogged(r.ok));
+    // demande la position dès l'arrivée (le client n'a rien à faire)
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+    }
   }, []);
 
   function chooseService(s: Service) {

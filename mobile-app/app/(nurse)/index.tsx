@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, Alert, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, Alert, ActivityIndicator, Vibration } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import type { LocationSubscription } from "expo-location";
 import { Screen, Card, Muted, Button, Badge } from "@/components/ui";
 import { Topbar } from "@/components/topbar";
 import { api } from "@/api/client";
 import { watchLocation } from "@/lib/location";
+import { notifyLocal } from "@/lib/push";
 
 const AVAIL = [{ k: "AVAILABLE", l: "Disponible" }, { k: "BUSY", l: "Occupé" }, { k: "OFFLINE", l: "Hors ligne" }];
 
@@ -17,6 +19,7 @@ export default function NurseHome() {
   const [loading, setLoading] = useState(true);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const sub = useRef<LocationSubscription | null>(null);
+  const prevCount = useRef(0);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -25,15 +28,25 @@ export default function NurseHome() {
       api("/api/nurses/me"),
       api("/api/bookings/available").catch(() => ({ data: { items: [] } })),
     ]).then(([b, p, av]) => {
-      setItems(b.data.bookings); setProfile(p.data.nurse); setAvailable(av.data.items ?? []); setLoading(false);
+      const av0 = av.data.items ?? [];
+      prevCount.current = av0.length;
+      setItems(b.data.bookings); setProfile(p.data.nurse); setAvailable(av0); setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // Rafraîchit les demandes entrantes (dispatch) toutes les 5 s
+  // Rafraîchit les demandes entrantes (dispatch) toutes les 5 s + notif si nouvelle demande
   useEffect(() => {
     const i = setInterval(() => {
-      api("/api/bookings/available").then((d) => setAvailable(d.data.items ?? [])).catch(() => {});
+      api("/api/bookings/available").then((d) => {
+        const items = d.data.items ?? [];
+        if (items.length > prevCount.current) {
+          Vibration.vibrate([0, 250, 100, 250]);
+          notifyLocal("🔔 Nouvelle demande !", `${items[0]?.service?.name ?? "Mission"} · ${items[0]?.nurseAmount ?? ""} TND — premier à accepter`);
+        }
+        prevCount.current = items.length;
+        setAvailable(items);
+      }).catch(() => {});
     }, 5000);
     return () => clearInterval(i);
   }, []);

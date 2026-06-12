@@ -3,7 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatTND } from "@/lib/utils";
-import { Loader2, Star, MapPin, Briefcase, CreditCard, ShieldCheck } from "lucide-react";
+import { Loader2, Star, MapPin, Briefcase, CreditCard, ShieldCheck, Lock } from "lucide-react";
 
 interface Booking {
   id: string;
@@ -20,6 +20,7 @@ export default function RequestPage({ params }: { params: Promise<{ id: string }
   const [booking, setBooking] = useState<Booking | null>(null);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [card, setCard] = useState({ number: "", name: "", exp: "", cvc: "" });
 
   const fetchBooking = useCallback(async () => {
     const res = await fetch(`/api/bookings/${id}`);
@@ -49,15 +50,31 @@ export default function RequestPage({ params }: { params: Promise<{ id: string }
     return () => { clearInterval(interval); cleanup?.(); };
   }, [id, fetchBooking]);
 
+  function formatCard(v: string) {
+    return v.replace(/\D/g, "").slice(0, 16).replace(/(.{4})/g, "$1 ").trim();
+  }
+  function formatExp(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 4);
+    return d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+  }
+
   async function pay() {
-    setPaying(true); setError(null);
+    setError(null);
+    const digits = card.number.replace(/\s/g, "");
+    if (digits.length < 12) { setError("Numéro de carte invalide"); return; }
+    if (!card.name.trim()) { setError("Nom sur la carte requis"); return; }
+    if (!/^\d{2}\/\d{2}$/.test(card.exp)) { setError("Date d'expiration invalide (MM/AA)"); return; }
+    if (card.cvc.replace(/\D/g, "").length < 3) { setError("CVC invalide"); return; }
+
+    setPaying(true);
     const res = await fetch("/api/payments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bookingId: id }) });
     const data = await res.json();
-    setPaying(false);
-    if (!res.ok) { setError(data.error ?? "Erreur de paiement"); return; }
+    if (!res.ok) { setError(data.error ?? "Erreur de paiement"); setPaying(false); return; }
     if (data.redirectUrl) { window.location.href = data.redirectUrl; return; }
     router.replace(`/track/${id}`);
   }
+
+  const inputCls = "h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-white placeholder:text-slate-500 outline-none focus:border-sky-400/60";
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#03040d] text-slate-100">
@@ -66,8 +83,8 @@ export default function RequestPage({ params }: { params: Promise<{ id: string }
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-emerald-400" /></div>
         ) : booking.status === "SEARCHING" ? (
           <div className="rounded-3xl glass p-10 text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-500/10">
-              <Loader2 className="size-9 animate-spin text-emerald-300" />
+            <div className="pulse-ring relative mx-auto mb-6 flex size-24 items-center justify-center rounded-full bg-emerald-500/10">
+              <Loader2 className="size-10 animate-spin text-emerald-300" />
             </div>
             <h1 className="text-2xl font-bold">Recherche d'un infirmier…</h1>
             <p className="mt-2 text-slate-400">Votre demande « {booking.service.name} » a été envoyée aux infirmiers disponibles autour de vous. Le premier qui accepte prendra la mission.</p>
@@ -75,9 +92,10 @@ export default function RequestPage({ params }: { params: Promise<{ id: string }
           </div>
         ) : booking.status === "AWAITING_PAYMENT" && booking.nurse ? (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-center text-emerald-200">
-              <ShieldCheck className="mx-auto mb-1 size-6" /> Un infirmier a accepté votre demande !
+            <div className="flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-emerald-200">
+              <ShieldCheck className="size-6" /> Un infirmier a accepté votre demande !
             </div>
+
             <div className="rounded-2xl glass p-6">
               <div className="flex items-center gap-4">
                 <div className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-sky-500/30 to-emerald-500/30 text-xl font-bold text-white">
@@ -92,18 +110,27 @@ export default function RequestPage({ params }: { params: Promise<{ id: string }
                   </p>
                 </div>
               </div>
-              {booking.nurse.bio && <p className="mt-4 text-sm text-slate-400">{booking.nurse.bio}</p>}
             </div>
+
+            {/* Paiement par carte */}
             <div className="rounded-2xl glass p-6">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300">{booking.service.name}</span>
+              <div className="mb-4 flex items-center justify-between">
+                <span className="flex items-center gap-2 font-semibold"><CreditCard className="size-5 text-sky-400" /> Paiement</span>
                 <span className="text-xl font-bold text-emerald-300">{formatTND(booking.price)}</span>
               </div>
-              {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+              <div className="space-y-3">
+                <input className={inputCls} inputMode="numeric" value={card.number} onChange={(e) => setCard({ ...card, number: formatCard(e.target.value) })} placeholder="Numéro de carte" />
+                <input className={inputCls} value={card.name} onChange={(e) => setCard({ ...card, name: e.target.value })} placeholder="Nom sur la carte" />
+                <div className="flex gap-3">
+                  <input className={inputCls} inputMode="numeric" value={card.exp} onChange={(e) => setCard({ ...card, exp: formatExp(e.target.value) })} placeholder="MM/AA" />
+                  <input className={inputCls} inputMode="numeric" value={card.cvc} onChange={(e) => setCard({ ...card, cvc: e.target.value.replace(/\D/g, "").slice(0, 4) })} placeholder="CVC" />
+                </div>
+              </div>
+              {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
               <button onClick={pay} disabled={paying} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-3.5 font-semibold text-white disabled:opacity-50">
-                {paying ? <Loader2 className="size-5 animate-spin" /> : <><CreditCard className="size-5" /> Accepter & Payer {formatTND(booking.price)}</>}
+                {paying ? <Loader2 className="size-5 animate-spin" /> : <><Lock className="size-4" /> Payer {formatTND(booking.price)}</>}
               </button>
-              <p className="mt-2 text-center text-xs text-slate-500">Paiement sécurisé. Vous suivrez ensuite l'infirmier en temps réel.</p>
+              <p className="mt-2 flex items-center justify-center gap-1 text-center text-xs text-slate-500"><Lock className="size-3" /> Paiement chiffré · vous suivrez ensuite l'infirmier en direct</p>
             </div>
           </div>
         ) : booking.status === "COMPLETED" ? (

@@ -32,6 +32,16 @@ export default function AdminUsers() {
     try { await api("/api/admin/payouts", { method: "PATCH", body: { nurseId } }); Alert.alert("Transfert effectué ✅"); if (detail?.user) open(detail.user.id); }
     catch (e: any) { Alert.alert("Erreur", e.message); }
   }
+  async function activateSub(nurseId: string, plan: string, action = "activate") {
+    try { await api("/api/admin/subscriptions", { method: "PATCH", body: { nurseId, plan, action } }); Alert.alert(action === "revoke" ? "Abonnement suspendu" : "Abonnement activé ✅"); if (detail?.user) open(detail.user.id); }
+    catch (e: any) { Alert.alert("Erreur", e.message); }
+  }
+  function subStatus(n: any): string {
+    const now = Date.now();
+    if (n?.subscriptionExpiresAt && new Date(n.subscriptionExpiresAt).getTime() > now) return `Abonné (${n.subscriptionPlan ?? ""}) jusqu'au ${new Date(n.subscriptionExpiresAt).toLocaleDateString("fr-FR")}`;
+    if (n?.trialEndsAt && new Date(n.trialEndsAt).getTime() > now) return `Essai gratuit jusqu'au ${new Date(n.trialEndsAt).toLocaleDateString("fr-FR")}`;
+    return "Inactif — aucun abonnement";
+  }
   async function patch(id: string, data: any) {
     await api(`/api/admin/users/${id}`, { method: "PATCH", body: data }); load(); open(id);
   }
@@ -62,8 +72,17 @@ export default function AdminUsers() {
           ))}
         </View>
 
-        {detail.pendingPayout > 0 && u.nurseProfile && (
-          <View className="mt-4"><Button title={`Transférer ${detail.pendingPayout} TND à l'infirmier`} onPress={() => transfer(u.nurseProfile.id)} /></View>
+        {u.nurseProfile && (
+          <Card className="mt-4">
+            <Muted>Abonnement SaaS</Muted>
+            <Text className="mt-1 font-semibold text-white">{subStatus(u.nurseProfile)}</Text>
+            {u.nurseProfile.subscriptionRequested && <View className="mt-2"><Badge text="⏳ Demande d'activation en attente" tone="warning" /></View>}
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              <Button title="Activer 1 mois" full={false} onPress={() => activateSub(u.nurseProfile.id, "MONTHLY")} />
+              <Button title="Activer 1 an" full={false} onPress={() => activateSub(u.nurseProfile.id, "ANNUAL")} />
+              <Button title="Suspendre" variant="danger" full={false} onPress={() => activateSub(u.nurseProfile.id, "MONTHLY", "revoke")} />
+            </View>
+          </Card>
         )}
 
         <View className="mt-4 flex-row flex-wrap gap-2">

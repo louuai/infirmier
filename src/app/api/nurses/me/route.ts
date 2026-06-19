@@ -4,8 +4,9 @@ import { requireRole } from "@/lib/session";
 import { nurseProfileSchema, nurseLocationSchema } from "@/lib/validations";
 import { handleApiError } from "@/lib/errors";
 import { ok } from "@/lib/api";
+import { nurseAccess, SUBSCRIPTION } from "@/lib/subscription";
 
-/** GET /api/nurses/me — profil de l'infirmier connecté. */
+/** GET /api/nurses/me — profil de l'infirmier connecté + état d'abonnement. */
 export async function GET(req: NextRequest) {
   try {
     const session = await requireRole(req, "NURSE");
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
       where: { userId: session.sub },
       include: { services: { include: { service: true } }, documents: true, availabilities: true },
     });
-    return ok({ nurse });
+    return ok({ nurse, access: nurseAccess(nurse), subscription: SUBSCRIPTION });
   } catch (err) {
     return handleApiError(err);
   }

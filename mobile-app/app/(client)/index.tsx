@@ -3,8 +3,9 @@ import { View, Text, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen, Card, Muted, Field, Button } from "@/components/ui";
 import { Topbar } from "@/components/topbar";
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/api/client";
-import { getMyLocation } from "@/lib/location";
+import { detectAddress } from "@/lib/location";
 
 interface Service { id: string; slug: string; name: string; description: string | null; price: number; }
 
@@ -16,13 +17,25 @@ export default function ClientHome() {
   const [city, setCity] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
 
-  useEffect(() => { api("/api/services").then((d) => setServices(d.data.services)); }, []);
+  useEffect(() => { api("/api/services").then((d) => setServices(d.data.services)); detectAndFill(); }, []);
+
+  async function detectAndFill() {
+    setLocating(true);
+    try {
+      const d = await detectAddress();
+      if (d) {
+        setCoords({ lat: d.lat, lng: d.lng });
+        setAddress((prev) => prev || d.address);
+        setCity((prev) => prev || d.city);
+      }
+    } finally { setLocating(false); }
+  }
 
   async function chooseService(s: Service) {
     setService(s);
-    const loc = await getMyLocation();
-    setCoords(loc);
+    if (!coords) detectAndFill();
   }
 
   async function submit() {
@@ -69,8 +82,9 @@ export default function ClientHome() {
       <View className="h-4" />
       <Field label="Adresse de la visite" value={address} onChangeText={setAddress} placeholder="Rue, ville..." />
       <Field label="Ville" value={city} onChangeText={setCity} />
-      <Pressable onPress={async () => setCoords(await getMyLocation())} className={`mb-3 self-start rounded-full border px-4 py-2 ${coords ? "border-emerald-400/40" : "border-white/15"}`}>
-        <Text className={coords ? "text-emerald-300" : "text-white"}>{coords ? "Position détectée ✓" : "Me géolocaliser"}</Text>
+      <Pressable onPress={detectAndFill} className={`mb-3 flex-row items-center gap-2 self-start rounded-full border px-4 py-2 ${coords ? "border-emerald-400/40" : "border-white/15"}`}>
+        <Ionicons name={locating ? "sync" : "locate"} size={16} color={coords ? "#2fe0a6" : "#fff"} />
+        <Text className={coords ? "text-emerald-300" : "text-white"}>{locating ? "Localisation…" : coords ? "Position détectée ✓" : "Me géolocaliser"}</Text>
       </Pressable>
       <Button title="Envoyer la demande" onPress={submit} loading={loading} />
       <View className="h-2" />

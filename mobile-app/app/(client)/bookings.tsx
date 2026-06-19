@@ -1,17 +1,11 @@
 import { useCallback, useState } from "react";
 import { View, Text, Alert, ActivityIndicator } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { Screen, Card, Muted, Button, Badge } from "@/components/ui";
 import { Topbar } from "@/components/topbar";
 import { api } from "@/api/client";
-
-const LABEL: Record<string, { t: string; tone: any }> = {
-  REQUESTED: { t: "En attente", tone: "warning" }, REFUSED: { t: "Refusée", tone: "danger" },
-  AWAITING_PAYMENT: { t: "À payer", tone: "warning" }, PAID: { t: "Payée", tone: "success" },
-  EN_ROUTE: { t: "En route", tone: "success" }, ARRIVED: { t: "Arrivé", tone: "success" },
-  IN_PROGRESS: { t: "En cours", tone: "default" }, COMPLETED: { t: "Terminée", tone: "success" },
-  CANCELLED: { t: "Annulée", tone: "default" }, EXPIRED: { t: "Expirée", tone: "default" },
-};
+import { theme, statusTone } from "@/theme";
 
 export default function Bookings() {
   const router = useRouter();
@@ -46,25 +40,28 @@ export default function Bookings() {
     }, "plain-text", "5");
   }
 
-  const paidStatuses = ["PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"];
+  const paidStatuses = ["ACCEPTED", "PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"];
 
   return (
     <Screen>
       <Topbar title="Mes réservations" />
-      {loading ? <ActivityIndicator color="#2fe0a6" /> : items.length === 0 ? <Muted>Aucune réservation.</Muted> : items.map((b) => {
-        const s = LABEL[b.status] ?? { t: b.status, tone: "default" };
+      {loading ? <ActivityIndicator color={theme.teal} /> : items.length === 0 ? (
+        <Card><View style={{ alignItems: "center", paddingVertical: 16 }}><Ionicons name="receipt-outline" size={30} color={theme.textFaint} /><Text style={{ color: theme.textDim, marginTop: 10 }}>Aucune réservation pour le moment.</Text><View style={{ height: 12 }} /><Button title="Trouver un infirmier" icon="search" full={false} onPress={() => router.push("/(client)")} /></View></Card>
+      ) : items.map((b) => {
+        const s = statusTone(b.status);
+        const nurseName = b.nurse?.user ? `${b.nurse.user.firstName} ${b.nurse.user.lastName}` : "Recherche en cours…";
         return (
           <Card key={b.id} className="mb-3">
             <View className="flex-row items-center justify-between">
-              <Text className="font-semibold text-white">{b.service.name}</Text>
-              <Badge text={s.t} tone={s.tone} />
+              <Text style={{ color: theme.text, fontWeight: "700", fontSize: 15, flex: 1 }}>{b.service.name}</Text>
+              <Badge text={s.label} tone={s.tone} />
             </View>
-            <Muted>avec {b.nurse.user.firstName} {b.nurse.user.lastName} · {b.price} TND</Muted>
+            <Muted>avec {nurseName} · {b.price} TND</Muted>
             <View className="mt-3 flex-row flex-wrap gap-2">
-              {b.status === "AWAITING_PAYMENT" && <Button title="Payer" onPress={() => pay(b.id)} loading={paying === b.id} />}
-              {["EN_ROUTE", "ARRIVED"].includes(b.status) && <Button title="Suivre" variant="ghost" onPress={() => router.push(`/track/${b.id}`)} />}
-              {paidStatuses.includes(b.status) && <Button title="Chat" variant="ghost" onPress={() => openChat(b.id)} />}
-              {b.status === "COMPLETED" && !b.review && <Button title="Laisser un avis" variant="ghost" onPress={() => review(b.id)} />}
+              {b.status === "SEARCHING" && <Button title="Voir la demande" icon="open" full={false} onPress={() => router.push(`/request/${b.id}`)} />}
+              {["ACCEPTED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS"].includes(b.status) && <Button title="Suivre l'infirmier" icon="location" full={false} onPress={() => router.push(`/track/${b.id}`)} />}
+              {paidStatuses.includes(b.status) && <Button title="Chat" icon="chatbubble-ellipses" variant="ghost" full={false} onPress={() => openChat(b.id)} />}
+              {b.status === "COMPLETED" && !b.review && <Button title="Laisser un avis" icon="star" variant="ghost" full={false} onPress={() => review(b.id)} />}
             </View>
           </Card>
         );

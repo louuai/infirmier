@@ -1,14 +1,19 @@
 import { useCallback, useState } from "react";
-import { View, Text, TextInput, Pressable, Alert, ActivityIndicator } from "react-native";
+import { View, Text, Alert, ActivityIndicator } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { Screen, Card, Muted, Button } from "@/components/ui";
+import { Ionicons } from "@expo/vector-icons";
+import { Screen, Card, Muted, Button, Field, Chip, Badge, Avatar, Stat, SectionLabel, FadeIn } from "@/components/ui";
 import { api } from "@/api/client";
 import { useAuth } from "@/store/auth";
-import { getMyLocation } from "@/lib/location";
+import { detectAddress } from "@/lib/location";
+import { theme } from "@/theme";
+
+const AVAIL = [{ k: "AVAILABLE", l: "Disponible", i: "flash" }, { k: "BUSY", l: "Occupé", i: "time" }, { k: "OFFLINE", l: "Hors ligne", i: "moon" }] as const;
 
 export default function NurseProfile() {
   const router = useRouter();
   const logout = useAuth((s) => s.logout);
+  const user = useAuth((s) => s.user);
   const [profile, setProfile] = useState<any>(null);
   const [allServices, setAllServices] = useState<any[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -16,6 +21,7 @@ export default function NurseProfile() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -26,83 +32,101 @@ export default function NurseProfile() {
         setAllServices(s.data.services ?? []);
         setSelected((n?.services ?? []).map((x: any) => x.service?.id ?? x.serviceId));
         setForm({
-          bio: n?.bio ?? "",
-          yearsOfExperience: String(n?.yearsOfExperience ?? 0),
-          city: n?.city ?? "",
-          address: n?.address ?? "",
-          interventionRadiusKm: String(n?.interventionRadiusKm ?? 15),
+          bio: n?.bio ?? "", yearsOfExperience: String(n?.yearsOfExperience ?? 0),
+          city: n?.city ?? "", address: n?.address ?? "", interventionRadiusKm: String(n?.interventionRadiusKm ?? 15),
         });
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }).catch(() => setLoading(false));
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  async function setAvail(availability: string) {
+    setProfile((p: any) => ({ ...p, availability }));
+    try { await api("/api/nurses/me", { method: "PATCH", body: { profile: { availability } } }); } catch {}
+  }
 
   async function save() {
     setSaving(true);
     try {
-      await api("/api/nurses/me", {
-        method: "PATCH",
-        body: {
-          profile: {
-            bio: form.bio,
-            yearsOfExperience: Number(form.yearsOfExperience) || 0,
-            city: form.city,
-            address: form.address,
-            interventionRadiusKm: Number(form.interventionRadiusKm) || 15,
-            latitude: coords?.lat,
-            longitude: coords?.lng,
-            serviceIds: selected,
-          },
-        },
-      });
-      Alert.alert("Profil mis à jour");
+      await api("/api/nurses/me", { method: "PATCH", body: { profile: {
+        bio: form.bio, yearsOfExperience: Number(form.yearsOfExperience) || 0,
+        city: form.city, address: form.address, interventionRadiusKm: Number(form.interventionRadiusKm) || 15,
+        latitude: coords?.lat, longitude: coords?.lng, serviceIds: selected,
+      } } });
+      Alert.alert("✓ Profil mis à jour");
     } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setSaving(false); }
   }
 
   async function geolocate() {
-    const loc = await getMyLocation();
-    if (loc) { setCoords(loc); Alert.alert("Position enregistrée", `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`); }
+    setLocating(true);
+    try {
+      const d = await detectAddress();
+      if (d) { setCoords({ lat: d.lat, lng: d.lng }); setForm((f) => ({ ...f, address: d.address || f.address, city: d.city || f.city })); Alert.alert("✓ Position enregistrée", d.address || `${d.lat.toFixed(3)}, ${d.lng.toFixed(3)}`); }
+      else Alert.alert("Localisation refusée");
+    } finally { setLocating(false); }
   }
 
-  const inputCls = "rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-white mb-3";
+  if (loading) return <Screen><ActivityIndicator color={theme.teal} /></Screen>;
 
-  if (loading) return <Screen><ActivityIndicator color="#2fe0a6" /></Screen>;
+  const approved = profile?.verificationStatus === "APPROVED";
 
   return (
     <Screen>
-      <Text className="mb-4 text-2xl font-extrabold text-white">Mon profil</Text>
+      <FadeIn>
+        <Card style={{ marginBottom: 14 }} glow>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <Avatar name={user ? `${user.firstName} ${user.lastName}` : "Infirmier"} size={60} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 19, fontWeight: "800" }}>{user?.firstName} {user?.lastName}</Text>
+              <View style={{ flexDirection: "row", gap: 6, marginTop: 5 }}>
+                <Badge text="Infirmier" tone="info" />
+                <Badge text={approved ? "✓ Vérifié" : "En attente"} tone={approved ? "success" : "warning"} />
+              </View>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 12, marginTop: 14 }}>
+            <Stat label="Note" value={`★ ${(profile?.ratingAverage ?? 0).toFixed(1)}`} icon="star" tone="warning" />
+            <Stat label="Avis" value={`${profile?.ratingCount ?? 0}`} icon="chatbox" tone="info" />
+            <Stat label="Rayon" value={`${profile?.interventionRadiusKm ?? 15} km`} icon="navigate" tone="default" />
+          </View>
+        </Card>
+      </FadeIn>
 
-      <Card className="mb-4">
-        <Muted>Bio</Muted>
-        <TextInput value={form.bio} onChangeText={(v) => setForm({ ...form, bio: v })} multiline className={inputCls + " mt-1"} placeholderTextColor="#64748b" />
-        <Muted>Années d'expérience</Muted>
-        <TextInput value={form.yearsOfExperience} onChangeText={(v) => setForm({ ...form, yearsOfExperience: v })} keyboardType="number-pad" className={inputCls + " mt-1"} placeholderTextColor="#64748b" />
-        <Muted>Ville</Muted>
-        <TextInput value={form.city} onChangeText={(v) => setForm({ ...form, city: v })} className={inputCls + " mt-1"} placeholderTextColor="#64748b" />
-        <Muted>Adresse</Muted>
-        <TextInput value={form.address} onChangeText={(v) => setForm({ ...form, address: v })} className={inputCls + " mt-1"} placeholderTextColor="#64748b" />
-        <Muted>Rayon d'intervention (km)</Muted>
-        <TextInput value={form.interventionRadiusKm} onChangeText={(v) => setForm({ ...form, interventionRadiusKm: v })} keyboardType="number-pad" className={inputCls + " mt-1"} placeholderTextColor="#64748b" />
-        <Button title="Me géolocaliser" variant="ghost" onPress={geolocate} />
+      <SectionLabel>Disponibilité</SectionLabel>
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+        {AVAIL.map((a) => <Chip key={a.k} label={a.l} icon={a.i} active={profile?.availability === a.k} onPress={() => setAvail(a.k)} />)}
+      </View>
+
+      {!approved && (
+        <Card style={{ marginBottom: 14 }}>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Ionicons name="alert-circle" size={18} color={theme.amber} />
+            <Text style={{ color: "#fcd34d", flex: 1 }}>Compte en attente. Déposez votre diplôme + CIN dans l'onglet Documents pour recevoir des missions.</Text>
+          </View>
+        </Card>
+      )}
+
+      <SectionLabel>Mes informations</SectionLabel>
+      <Card style={{ marginBottom: 14 }}>
+        <Field label="Bio" icon="document-text" value={form.bio} onChangeText={(v) => setForm({ ...form, bio: v })} multiline placeholder="Présentez-vous en quelques mots…" />
+        <Field label="Années d'expérience" icon="ribbon" value={form.yearsOfExperience} onChangeText={(v) => setForm({ ...form, yearsOfExperience: v })} keyboardType="number-pad" />
+        <Field label="Ville" icon="business" value={form.city} onChangeText={(v) => setForm({ ...form, city: v })} />
+        <Field label="Adresse" icon="home" value={form.address} onChangeText={(v) => setForm({ ...form, address: v })} />
+        <Field label="Rayon d'intervention (km)" icon="navigate" value={form.interventionRadiusKm} onChangeText={(v) => setForm({ ...form, interventionRadiusKm: v })} keyboardType="number-pad" />
+        <Button title={locating ? "Localisation…" : coords ? "Position mise à jour ✓" : "Me géolocaliser"} icon="locate" variant="ghost" onPress={geolocate} loading={locating} />
       </Card>
 
-      <Text className="mb-2 font-semibold text-white">Services proposés</Text>
-      <View className="mb-4 flex-row flex-wrap gap-2">
-        {allServices.map((s) => {
-          const on = selected.includes(s.id);
-          return (
-            <Pressable key={s.id} onPress={() => setSelected((p) => on ? p.filter((x) => x !== s.id) : [...p, s.id])} className={`rounded-full px-3 py-2 ${on ? "bg-emerald-500" : "border border-white/15"}`}>
-              <Text className={on ? "text-white" : "text-slate-400"}>{s.name}</Text>
-            </Pressable>
-          );
-        })}
+      <SectionLabel>Services proposés</SectionLabel>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {allServices.map((s) => (
+          <Chip key={s.id} label={s.name} active={selected.includes(s.id)}
+            onPress={() => setSelected((p) => p.includes(s.id) ? p.filter((x) => x !== s.id) : [...p, s.id])} />
+        ))}
       </View>
 
-      <Button title="Enregistrer" onPress={save} loading={saving} />
-      <View className="mt-4">
-        <Button title="Déconnexion" variant="danger" onPress={async () => { await logout(); router.replace("/login"); }} />
-      </View>
+      <Button title="Enregistrer les modifications" icon="save" onPress={save} loading={saving} />
+      <View style={{ height: 12 }} />
+      <Button title="Déconnexion" icon="log-out" variant="danger" onPress={async () => { await logout(); router.replace("/(public)/landing"); }} />
     </Screen>
   );
 }

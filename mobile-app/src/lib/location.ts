@@ -7,6 +7,30 @@ export async function getMyLocation() {
   return { lat: pos.coords.latitude, lng: pos.coords.longitude };
 }
 
+/** Reverse-geocoding : coords -> { address, city }. */
+export async function reverseGeocode(lat: number, lng: number): Promise<{ address: string; city: string }> {
+  try {
+    const res = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+    const r = res[0];
+    if (!r) return { address: "", city: "" };
+    const parts = [r.name || r.street, r.streetNumber].filter(Boolean);
+    const street = r.street && r.name && r.name !== r.street ? `${r.name}, ${r.street}` : (parts.join(" ") || r.street || r.name || "");
+    const city = r.city || r.subregion || r.region || "";
+    const address = [street, r.district].filter(Boolean).join(", ") || city;
+    return { address, city };
+  } catch {
+    return { address: "", city: "" };
+  }
+}
+
+/** Détecte la position ET l'adresse en une fois. */
+export async function detectAddress(): Promise<{ lat: number; lng: number; address: string; city: string } | null> {
+  const loc = await getMyLocation();
+  if (!loc) return null;
+  const a = await reverseGeocode(loc.lat, loc.lng);
+  return { ...loc, ...a };
+}
+
 /** Suivi continu de la position (pour l'infirmier en mission). */
 export async function watchLocation(cb: (lat: number, lng: number) => void) {
   const { status } = await Location.requestForegroundPermissionsAsync();

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDate, formatTND } from "@/lib/utils";
-import { Loader2, CreditCard, MapPin, Star } from "lucide-react";
+import { Loader2, MapPin, Star } from "lucide-react";
 
 interface Booking {
   id: string; status: string; address: string; price: number; createdAt: string;
@@ -30,7 +30,6 @@ const LABEL: Record<string, { t: string; c: string }> = {
 export default function PatientDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [paying, setPaying] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch("/api/bookings");
@@ -39,16 +38,6 @@ export default function PatientDashboard() {
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
-
-  async function pay(id: string) {
-    setPaying(id);
-    const res = await fetch("/api/payments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bookingId: id }) });
-    const data = await res.json();
-    setPaying(null);
-    if (!res.ok) { alert(data.error); return; }
-    if (data.redirectUrl) { window.location.href = data.redirectUrl; return; }
-    load();
-  }
 
   async function cancel(id: string) {
     if (!confirm("Annuler cette réservation ?")) return;
@@ -86,23 +75,18 @@ export default function PatientDashboard() {
                     <span className="font-semibold text-emerald-300">{formatTND(b.price)}</span>
                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${s.c}`}>{s.t}</span>
                     <Link href={`/invoices/${b.id}`} className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10">Facture</Link>
-                    {["SEARCHING", "AWAITING_PAYMENT"].includes(b.status) && (
+                    {b.status === "SEARCHING" && (
                       <Link href={`/request/${b.id}`} className="rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-3 py-1.5 text-xs font-semibold text-white">Voir la demande</Link>
                     )}
-                    {b.status === "AWAITING_PAYMENT" && (
-                      <button onClick={() => pay(b.id)} disabled={paying === b.id} className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
-                        <CreditCard className="size-4" /> {paying === b.id ? "..." : "Payer"}
-                      </button>
-                    )}
-                    {["PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(b.status) && (
+                    {["ACCEPTED", "PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(b.status) && (
                       <Link href={`/messages?booking=${b.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10">Chat</Link>
                     )}
-                    {["EN_ROUTE", "ARRIVED"].includes(b.status) && (
+                    {["ACCEPTED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS"].includes(b.status) && (
                       <Link href={`/track/${b.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 px-4 py-1.5 text-sm font-semibold text-emerald-300">
                         <MapPin className="size-4" /> Suivre
                       </Link>
                     )}
-                    {["REQUESTED", "AWAITING_PAYMENT", "PAID"].includes(b.status) && (
+                    {["REQUESTED", "SEARCHING", "ACCEPTED"].includes(b.status) && (
                       <button onClick={() => cancel(b.id)} className="rounded-full border border-white/15 px-4 py-1.5 text-sm text-white hover:bg-white/10">Annuler</button>
                     )}
                     {b.status === "COMPLETED" && !b.review && <ReviewButton bookingId={b.id} onDone={load} />}

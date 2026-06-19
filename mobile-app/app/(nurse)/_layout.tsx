@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   index: "notifications",
@@ -10,11 +11,12 @@ const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function NurseLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: { backgroundColor: "#06101f", borderTopColor: "rgba(255,255,255,0.08)", height: 62, paddingBottom: 8, paddingTop: 6 },
+        tabBarStyle: { backgroundColor: "#070b18", borderTopColor: "rgba(255,255,255,0.08)", height: 58 + insets.bottom, paddingBottom: insets.bottom + 6, paddingTop: 8 },
         tabBarActiveTintColor: "#2fe0a6",
         tabBarInactiveTintColor: "#64748b",
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },

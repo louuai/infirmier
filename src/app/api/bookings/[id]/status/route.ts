@@ -10,7 +10,7 @@ import type { BookingStatus } from "@prisma/client";
 
 // L'acceptation se fait via /claim (dispatch). Ici : étapes après paiement.
 const FLOW: Record<string, { from: BookingStatus; to: BookingStatus }> = {
-  en_route: { from: "PAID", to: "EN_ROUTE" },
+  en_route: { from: "ACCEPTED", to: "EN_ROUTE" },
   arrived: { from: "EN_ROUTE", to: "ARRIVED" },
   start: { from: "ARRIVED", to: "IN_PROGRESS" },
   complete: { from: "IN_PROGRESS", to: "COMPLETED" },
@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           },
           update: {},
         });
-        await tx.payout.create({ data: { nurseId, amount: booking.nurseAmount, status: "PENDING" } });
+        // Paiement sur place : aucun versement plateforme → pas de payout.
         await tx.trackingSession.updateMany({ where: { bookingId: id }, data: { active: false, endedAt: new Date() } });
         await tx.nurseProfile.update({ where: { id: nurseId }, data: { availability: "AVAILABLE" } });
       }

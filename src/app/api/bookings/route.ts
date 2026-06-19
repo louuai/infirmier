@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { getSessionFromRequest } from "@/lib/session";
 import { BadRequestError, NotFoundError, UnauthorizedError, handleApiError } from "@/lib/errors";
 import { created, ok } from "@/lib/api";
-import { computeSplit } from "@/lib/config";
 import { notify } from "@/lib/notifications";
 import { trigger } from "@/lib/pusher";
 import { logger } from "@/lib/logger";
@@ -65,8 +64,7 @@ export async function POST(req: NextRequest) {
     const service = await prisma.service.findUnique({ where: { id: input.serviceId } });
     if (!service || !service.active) throw new NotFoundError("Service indisponible");
 
-    const split = computeSplit(service.price);
-
+    // Paiement sur place : l'infirmier perçoit l'intégralité du tarif (plateforme financée par l'abonnement).
     const booking = await prisma.booking.create({
       data: {
         patientId: session?.role === "PATIENT" ? session.sub : null,
@@ -82,18 +80,20 @@ export async function POST(req: NextRequest) {
         latitude: input.latitude,
         longitude: input.longitude,
         price: service.price,
-        commissionRate: split.commissionRate,
-        commissionAmount: split.commissionAmount,
-        nurseAmount: split.nurseAmount,
+        commissionRate: 0,
+        commissionAmount: 0,
+        nurseAmount: service.price,
       },
     });
 
-    // Diffusion à tous les infirmiers éligibles (validés + disponibles + proposant le service)
+    // Diffusion aux infirmiers éligibles : validés + disponibles + proposant le service + abonnement/essai actif
+    const now = new Date();
     const eligible = await prisma.nurseProfile.findMany({
       where: {
         verificationStatus: "APPROVED",
         availability: "AVAILABLE",
         services: { some: { serviceId: service.id } },
+        OR: [{ subscriptionExpiresAt: { gt: now } }, { trialEndsAt: { gt: now } }],
       },
       select: { id: true, userId: true },
     });

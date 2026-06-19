@@ -37,8 +37,9 @@ enum BookingStatus {
   SEARCHING        // demande diffusée à tous les infirmiers du service (dispatch)
   REQUESTED        // (legacy) demande envoyée à un infirmier précis
   REFUSED          // refusée par l'infirmier
-  AWAITING_PAYMENT // acceptée → facture générée, en attente de paiement
-  PAID             // payée → prête à démarrer
+  AWAITING_PAYMENT // (legacy) acceptée → en attente de paiement en ligne
+  ACCEPTED         // acceptée par un infirmier — paiement sur place, suivi direct
+  PAID             // (legacy) payée en ligne → prête à démarrer
   EN_ROUTE         // infirmier en route (tracking actif)
   ARRIVED          // infirmier arrivé
   IN_PROGRESS      // soin en cours
@@ -176,6 +177,12 @@ model NurseProfile {
 
   ratingAverage Float @default(0)
   ratingCount   Int   @default(0)
+
+  // Abonnement SaaS (accès à l'app). trialEndsAt = essai gratuit 7 j à la validation.
+  subscriptionPlan      String?   // "MONTHLY" | "ANNUAL"
+  subscriptionExpiresAt DateTime?
+  subscriptionRequested Boolean   @default(false) // demande d'activation en attente côté admin
+  trialEndsAt           DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

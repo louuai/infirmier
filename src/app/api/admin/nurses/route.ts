@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/session";
 import { handleApiError, NotFoundError } from "@/lib/errors";
 import { ok } from "@/lib/api";
 import { notify } from "@/lib/notifications";
+import { SUBSCRIPTION } from "@/lib/subscription";
 import { z } from "zod";
 
 /** GET /api/admin/nurses - infirmiers à vérifier (ou tous). */
@@ -41,11 +42,18 @@ export async function PATCH(req: NextRequest) {
     const nurse = await prisma.nurseProfile.findUnique({ where: { id: nurseId } });
     if (!nurse) throw new NotFoundError("Infirmier introuvable");
 
+    // À la validation : démarre l'essai gratuit (7 jours) s'il n'a jamais été accordé.
+    const trialEndsAt =
+      decision === "APPROVED" && !nurse.trialEndsAt && !nurse.subscriptionExpiresAt
+        ? new Date(Date.now() + SUBSCRIPTION.trialDays * 86400000)
+        : undefined;
+
     const updated = await prisma.nurseProfile.update({
       where: { id: nurseId },
       data: {
         verificationStatus: decision,
         verifiedAt: decision === "APPROVED" ? new Date() : null,
+        ...(trialEndsAt ? { trialEndsAt } : {}),
         documents:
           decision === "APPROVED" ? { updateMany: { where: {}, data: { verified: true } } } : undefined,
       },

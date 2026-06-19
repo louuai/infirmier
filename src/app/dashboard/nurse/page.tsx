@@ -91,7 +91,7 @@ export default function NurseDashboard() {
   const day = 86400000;
   const sum = (since: number) => completed.filter((b) => b.completedAt && now - new Date(b.completedAt).getTime() <= since).reduce((a, b) => a + b.nurseAmount, 0);
   const requests = bookings.filter((b) => !["COMPLETED", "REFUSED", "CANCELLED", "EXPIRED"].includes(b.status));
-  const billables = bookings.filter((b) => ["AWAITING_PAYMENT", "PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(b.status));
+  const billables = bookings.filter((b) => ["ACCEPTED", "AWAITING_PAYMENT", "PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(b.status));
 
   const verified = profile?.verificationStatus === "APPROVED";
   const myServiceIds: string[] = profile?.services?.map((s: any) => s.service?.id ?? s.serviceId) ?? [];
@@ -186,13 +186,12 @@ export default function NurseDashboard() {
                       <div className="flex flex-wrap gap-2">
                         <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">{b.status}</span>
                         {b.status === "REQUESTED" && <><Btn onClick={() => act(b.id, "accept")}>Accepter</Btn><BtnGhost onClick={() => act(b.id, "refuse")}>Refuser</BtnGhost></>}
-                        {b.status === "AWAITING_PAYMENT" && <span className="text-xs text-amber-300">En attente du paiement client</span>}
-                        {b.status === "PAID" && <Btn onClick={() => act(b.id, "en_route")}>Démarrer (en route)</Btn>}
+                        {b.status === "ACCEPTED" && <Btn onClick={() => act(b.id, "en_route")}>Démarrer (en route)</Btn>}
                         {b.status === "EN_ROUTE" && <>
                           <button onClick={() => toggleShare(b.id)} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold ${sharingId === b.id ? "bg-emerald-500 text-white" : "border border-emerald-400/40 text-emerald-300"}`}><Navigation className="size-4" /> {sharingId === b.id ? "Position partagée…" : "Partager position"}</button>
                           <Btn onClick={() => act(b.id, "arrived")}>Arrivé</Btn>
                         </>}
-                        {["PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(b.status) && <Link href={`/messages?booking=${b.id}`} className="rounded-full border border-white/15 px-4 py-1.5 text-sm text-white hover:bg-white/10">Chat client</Link>}
+                        {["ACCEPTED", "PAID", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(b.status) && <Link href={`/messages?booking=${b.id}`} className="rounded-full border border-white/15 px-4 py-1.5 text-sm text-white hover:bg-white/10">Chat client</Link>}
                         {b.status === "ARRIVED" && <Btn onClick={() => act(b.id, "start")}>Commencer le soin</Btn>}
                         {b.status === "IN_PROGRESS" && <Btn onClick={() => act(b.id, "complete")}>Terminer</Btn>}
                       </div>
